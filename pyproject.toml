@@ -1,0 +1,25 @@
+[project]
+name = "literate-diff"
+version = "0.1.0"
+description = "Turn a git diff into an annotated, shareable single-file HTML narrative"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "markdown-it-py>=3.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+literate-diff = "literate_diff.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

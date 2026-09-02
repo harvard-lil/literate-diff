@@ -1,0 +1,314 @@
+title: "H2O: one build graph, prod…main"
+subtitle: "Making CI test the artifact that actually ships"
+
+plot: |
+  Before this batch, three things that were supposed to describe the same
+  application were maintained separately. `Dockerfile` built the production
+  image and copied `settings_aws_ecs.py` over `settings.py` at build time.
+  `docker/Dockerfile` built a different image for local work and CI. And the
+  compiled frontend bundles in `web/static/dist/` were built by hand on
+  someone's laptop and committed, so the bundles in the repo were whatever the
+  last person to remember had produced.
+
+  The result was that CI tested a sibling of the deployable image rather than
+  the image itself, and a deploy rebuilt from source rather than promoting what
+  had been tested.
+
+  The batch closes that gap in three moves, each of which enables the next:
+
+  1. **Settings become a runtime choice.** `H2O_SETTINGS_MODULE` selects a
+     deployment target when the process boots, so one image can be prod in
+     production and dev in CI without a `settings.py` baked into a layer.
+  2. **One Dockerfile, one build graph.** `base` → `assets` → `prod`, with
+     `test` built `FROM prod`. Because `test` inherits prod's layers, running
+     the suite means running against what ships.
+  3. **The frontend is compiled inside the image,** and `web/static/dist/`
+     leaves version control. A freshness check keeps a developer's local
+     bundles honest now that git no longer carries them.
+
+  Read the settings switch first — the Docker and CI changes both depend on it.
+  The deleted `web/static/dist/` bundles (over 300 files of minified output)
+  are hidden below; nothing in them is worth reading.
+
+# --- ordering, visibility -----------------------------------------------------
+
+hide:
+  - "web/static/dist/**"
+
+collapse:
+  - "web/package-lock.json"
+  - ".github/workflows/build.yml"
+  - ".github/workflows/develop.yml"
+  - "docker/pandoc-lambda/Dockerfile"
+
+order:
+  # Move 1: settings selected at runtime.
+  - web/config/settings/__init__.py
+  - web/config/settings/settings.py.example
+  - web/test/test_h2o_settings_module.py
+  # Move 2: one build graph.
+  - Dockerfile
+  - docker/install-test-toolchain.sh
+  - docker/Dockerfile
+  # Move 3: the frontend is built, not committed.
+  - web/frontend_assets.py
+  - web/conftest.py
+  - web/webpack-stats.json
+  # How the pieces get run.
+  - docker-compose.yml
+  - docker-compose.override.yml
+  - docker-compose.ci.yml
+  # CI wiring.
+  - .github/workflows/main.yml
+  - .github/workflows/lint_test.yml
+  - .github/workflows/staging.yml
+  - .github/workflows/prod.yml
+  - "*"
+
+# --- per-file annotation ------------------------------------------------------
+
+files:
+  web/config/settings/__init__.py:
+    title: the runtime settings switch
+    note: |
+      ## 1. Settings become a runtime choice
+
+      Everything else in this batch rests on this file. The old build copied
+      `settings_aws_ecs.py` to `settings.py` inside the image, which meant the
+      image *was* its deployment target: you could not run the production
+      artifact anywhere else, so CI could not run it at all.
+
+      Reading `H2O_SETTINGS_MODULE` from the environment instead moves that
+      decision from build time to boot time. The same bytes can come up as
+      production in ECS and as `settings_dev` in CI —
+      [which is exactly what docker-compose.ci.yml does](ld:#ci-settings-override).
+    sections:
+      - at: "import importlib"
+        id: settings-switch
+        title: "Two ways in, one exit"
+        note: |
+          The env var takes precedence; the `settings.py` path is untouched, so
+          a developer's existing local checkout keeps working unchanged. Both
+          paths land back in this module, which is why Sentry setup and
+          `validate_settings()` below still run either way.
+    notes:
+      - at: "isidentifier"
+        span: 6
+        id: settings-identifier
+        text: |
+          The name goes straight into `importlib.import_module`, so it is
+          checked before use rather than after.
+      - at: "if e.name =="
+        span: 8
+        id: settings-no-fallback
+        text: |
+          The interesting half of the error handling. A `ModuleNotFoundError`
+          raised from *inside* a settings module — a missing `APP_CONFIG`, say —
+          propagates untouched. Only "that module does not exist" is converted,
+          and even then it refuses to fall back to `settings_dev`: booting
+          production with development settings because of a typo is the failure
+          this is written to prevent.
+      - at: "globals().update"
+        span: 3
+        id: settings-uppercase
+        text: |
+          `import *` would have dragged the target module's own imports
+          (`os`, `Path`) into the settings namespace. Copying only uppercase
+          names matches what Django actually reads.
+    anchors:
+      - id: settings-env-read
+        at: "_h2o_settings_module = os.environ.get"
+        span: 1
+
+  web/config/settings/settings.py.example:
+    note: |
+      The developer-facing documentation of the same choice.
+
+  web/test/test_h2o_settings_module.py:
+    title: tests for the switch
+    note: |
+      New tests covering the branch above: valid module, missing module,
+      non-identifier, and — the one that matters —
+      [an ImportError raised from inside a real settings module](ld:#settings-no-fallback)
+      reaching the caller unchanged.
+
+  Dockerfile:
+    title: one build graph
+    note: |
+      ## 2. One Dockerfile, one build graph
+
+      The old file was a two-stage `builder` → production build, with a
+      *separate* `docker/Dockerfile` for local development and CI. Five named
+      stages replace both. The shape is the argument: `test` is built
+      `FROM prod`, so it is not a parallel image that happens to resemble the
+      deployable one — it is the deployable one plus a toolchain.
+    sections:
+      - at: "FROM python:3.11-bookworm AS base"
+        id: dockerfile-base
+        title: "base — shared Python layer, no app code"
+        note: |
+          Also drops `registry.lil.tools/library/` in favour of upstream
+          `python:3.11-bookworm`.
+      - at: "FROM node:16.14.0-bullseye AS assets"
+        id: dockerfile-assets
+        title: "assets — the compiled bundles"
+        note: |
+          Previously this output was produced by hand and committed. Building
+          it here is what lets `web/static/dist/` leave the repository; see
+          [frontend_assets.py](ld:#file-web-frontend_assets.py).
+      - at: "FROM base AS prod"
+        id: dockerfile-prod
+        title: "prod — the deployable artifact"
+      - at: "FROM base AS dev"
+        id: dockerfile-dev
+        title: "dev — local development, no app code"
+        note: |
+          Deliberately not `FROM prod`: docker-compose bind-mounts the working
+          tree over `/app`, so baked-in code would only be shadowed.
+      - at: "FROM prod AS test"
+        id: dockerfile-test
+        title: "test — what CI runs the suite against"
+        note: |
+          The load-bearing line of the batch. `FROM prod` means the suite runs
+          against prod's uwsgi layer, prod's baked-in code, and — because the
+          stage ends by switching back to `USER h2o` — prod's real filesystem
+          permissions.
+    notes:
+      - at: "CPUCOUNT=1 makes uwsgi"
+        span: 5
+        text: |
+          A flake fix rather than a design change: uwsgi's build forks one gcc
+          per CPU and one of those forks intermittently died on a loaded runner.
+      - at: "ENV H2O_SETTINGS_MODULE=settings_aws_ecs"
+        span: 1
+        id: dockerfile-settings-env
+        text: |
+          Where [the settings switch](ld:#settings-switch) gets its value in
+          production. It is an `ENV`, not a baked-in file, so anything running
+          this image can override it.
+      - at: "COPY --from=assets --chown=h2o:h2o /app/web/node_modules"
+        span: 3
+        text: |
+          `node_modules` comes from the `assets` stage rather than a fresh
+          `npm ci`, so the JS tests run against the same tree the bundles were
+          built from.
+      - at: "ENV H2O_SKIP_ASSET_CHECK=1"
+        span: 1
+        id: docker-skip-check
+        text: |
+          The escape hatch for images that already have their bundles baked in;
+          [the check it disables](ld:#assets-skip) is on the next file but one.
+
+  docker/install-test-toolchain.sh:
+    note: |
+      The toolchain install that `dev` and `test` used to duplicate, extracted
+      so [the two stages](ld:#dockerfile-test) cannot drift apart.
+
+  docker/Dockerfile:
+    note: |
+      And the file all of that replaces.
+
+  web/frontend_assets.py:
+    title: keeping local bundles honest
+    note: |
+      ## 3. The frontend is built, not committed
+
+      With `web/static/dist/` gone from git, a fresh checkout has no bundles at
+      all and an old checkout may have stale ones. Inside an image that is
+      fine — [the assets stage builds them](ld:#dockerfile-assets) — but a
+      developer running the app locally needs them produced on demand.
+
+      A stale bundle is the worse failure of the two: everything runs, and
+      quietly exercises last week's frontend.
+    notes:
+      - at: "mtimes are not usable"
+        span: 4
+        text: |
+          The reason this hashes inputs rather than comparing timestamps: git
+          sets mtimes to checkout time, so freshness in a clone is an artifact
+          of write order.
+      - at: "static/ is in here because the SCSS resolves"
+        span: 3
+        text: |
+          Easy to get wrong — the SCSS reads `static/images/*.svg` at build
+          time, so an icon change has to invalidate the hash.
+      - at: "H2O_SKIP_ASSET_CHECK"
+        span: 3
+        id: assets-skip
+        text: |
+          Read by [the prod and test images](ld:#docker-skip-check), which have
+          neither npm nor sources to rebuild from.
+
+  web/conftest.py:
+    note: |
+      Where the freshness check gets called: a session-scoped autouse fixture,
+      because `base.html` calls `render_bundle`, so *every* page-rendering
+      test reads `webpack-stats.json`, not only the Playwright ones.
+
+  web/webpack-stats.json:
+    note: |
+      The one-line deletion that the whole third move is about.
+
+  docker-compose.yml:
+    note: |
+      ## Running the pieces
+
+      The compose files decide which stage each context gets.
+
+  docker-compose.override.yml:
+    note: |
+      Applied automatically for local work: the `dev` image with the working
+      tree bind-mounted.
+
+  docker-compose.ci.yml:
+    title: CI runs the shipping artifact
+    note: |
+      New, and the counterpart to the `test` stage. Compose only auto-applies
+      `docker-compose.override.yml` when no `-f` flags are given, so naming
+      files explicitly here is what drops the bind mount that would otherwise
+      shadow the image with the source tree.
+    sections:
+      - at: "environment:"
+        id: ci-settings-override
+        title: "Where the runtime settings switch pays off"
+        note: |
+          The image inherits `H2O_SETTINGS_MODULE=settings_aws_ecs` from prod,
+          and those settings need a production secret CI has no business
+          holding. Overriding the variable — rather than weakening the image —
+          keeps the artifact byte-identical to what ships and changes only its
+          runtime configuration. The value being overridden is
+          [set here in the prod stage](ldq:#dockerfile-settings-env), and read
+          [here](ldq:#settings-env-read).
+    notes:
+      - at: "pull_policy: never"
+        span: 1
+        text: |
+          Fails loudly if the image was not already built, rather than quietly
+          building a second one that nothing tested.
+
+  .github/workflows/main.yml:
+    title: the new CI entry point
+    note: |
+      ## CI wiring
+
+      One entry point replaces `build.yml` and `develop.yml`.
+    notes:
+      - at: "secrets: inherit"
+        nth: 1
+        span: 1
+        text: |
+          Pull requests get a read-only token and one named secret; only pushes
+          to `main`, which publish, get `secrets: inherit`.
+
+  .github/workflows/lint_test.yml:
+    note: |
+      The reusable suite, now run against `docker-compose.ci.yml`.
+
+  .github/workflows/staging.yml:
+    note: |
+      Publishing changes shape: the pipeline promotes the image the suite
+      tested rather than rebuilding from source at deploy time.
+
+  .github/workflows/prod.yml:
+    note: |
+      The same promotion for production.
