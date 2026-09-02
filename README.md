@@ -12,15 +12,6 @@ uv run literate-diff --repo ../some-repo --range prod...main \
 The output has no external requests — CSS and JS are inlined — so it can be
 emailed, dropped in a bucket, or attached to a ticket.
 
-## Why not annotate GitHub's page
-
-GitHub's compare view renders its diffs client-side. A saved copy of
-`/compare/prod...main` contains the commit list and page chrome but none of the
-diff text, so there is nothing to inject annotations into. "Save as web page,
-complete" captures only what the virtualized DOM had rendered at save time.
-Generating the page is also what makes file reordering and mid-file section
-bands possible at all.
-
 ## Input
 
 Either a repo and a range:
