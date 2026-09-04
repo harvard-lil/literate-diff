@@ -9,6 +9,13 @@ uv run literate-diff --repo ../some-repo --range prod...main \
     -a notes.yaml -o review.html
 ```
 
+Or, without cloning this repository:
+
+```bash
+uvx --from git+https://github.com/harvard-lil/literate-diff literate-diff \
+    --repo ../some-repo --range prod...main -a notes.yaml -o review.html
+```
+
 The output has no external requests — CSS and JS are inlined — so it can be
 emailed, dropped in a bucket, or attached to a ticket.
 
@@ -129,6 +136,151 @@ The value being overridden is [set here](ldq:#dockerfile-settings-env).
 Every file also gets an automatic id, `#file-<path with non-word chars
 hyphenated>` — e.g. `ld:#file-web-frontend_assets.py`.
 
+## More than one repository
+
+A change often spans repos: h2o pins `harvard-lil/lil-actions/…@main`, so an
+action change reaches it with no commit in h2o at all, and the registry it
+deploys into is defined in lil-terraform. Reading any one diff alone hides most
+of the story.
+
+Declare the repos as named sources and address files as `source:path`:
+
+```yaml
+sources:
+  actions: {repo: ../lil-actions, range: 48b57bb...e626b6e}
+  tf:
+    repo: ../lil-terraform
+    range: f6b5a5e...9fadc90
+    pathspec: [h2o/aws, legacy/primary/us-east-1/ecr]
+  h2o: {repo: ../h2o, range: prod...main}
+```
+
+A source may also take `label:` (display name), `diff:` (a patch file instead of
+a repo and range), and its own `context:`. Sources can be added from the command
+line too, repeatably: `--source actions=../lil-actions@48b57bb...e626b6e`.
+
+With sources declared, `order:`, `hide:`, `collapse:` and the keys under
+`files:` all accept qualified keys. A pattern **with** a `source:` prefix matches
+that repo only; a **bare** pattern matches the path inside every repo, so
+`hide: ["**/node_modules/**"]` means the same thing everywhere and single-repo
+sidecars keep working. A bare key under `files:` is fine when it is unambiguous;
+when two repos share the path, it is reported rather than guessed at.
+
+References need nothing new — ids are document-global, so `ld:` and `ldq:` cross
+repositories exactly as they cross files, arrows included. Automatic file ids
+include the source (`#file-actions-ecs-build-action.yml`), so two repos with the
+same path do not collide.
+
+### Chapters
+
+Across several repos the reader needs to be told why the document just moved
+from one to another. `chapters:` replaces `order:` and cuts it into titled,
+annotated runs:
+
+```yaml
+chapters:
+  - id: mechanism
+    title: "1. A way to tag an image without rebuilding it"
+    note: |
+      Promotion needs an operation that marks an existing image as deployed.
+      That operation did not exist yet.
+    files:
+      - actions:ecr-tag-image/action.yml
+      - actions:ecs-build/action.yml
+
+  - title: "2. A registry that will accept it"
+    files:
+      - "tf:**/ecr/**"
+
+  - title: "Everything else"
+    files: ["*"]
+```
+
+`*` may appear inside any chapter's `files:` and takes the remainder there;
+without one, unclaimed files become a closing untitled run. A chapter's `id`
+makes it linkable as `ld:#ch-<id>`. Setting both `chapters:` and `order:` warns
+and uses chapters.
+
+### Categories
+
+A plot that lists what a batch achieved -- by kind of win: security,
+performance, cost -- wants a way to point from each claim to the lines that
+deliver it, and back. `categories:` declares the kinds; a list in any
+annotation is bound to one by a `{category: name}` marker on the line before it,
+and any annotation can then cite an item with an `ldc:` flag.
+
+```yaml
+categories:
+  security: Security
+  cost: {label: Cost, color: "#882255", short: "$"}
+
+plot: |
+  ## Security
+
+  {category: security}
+  1. {#build-role} Builds publish under a role that cannot deploy.
+  2. Deploy roles trust one GitHub environment each, not every branch.
+
+files:
+  tf:h2o/aws/iam/iam_role.tf:
+    note: |
+      The build role [](ldc:#build-role) is this resource.
+```
+
+Items are numbered by position and coloured by category. The colours come from
+Paul Tol's muted scheme, which stays distinguishable under the common forms of
+colour-vision deficiency; `color:` overrides one, and `short:` prefixes the
+number (`$1`) where colour alone should not carry the distinction. An item may
+carry an id in `{#id}`; without one it is addressable as `name-N`.
+
+A flag `[](ldc:#build-role)` renders as the item's coloured number. Hovering it
+shows the item's text; clicking it goes to the item. Each item in turn lists the
+places that flag it, with the usual direction arrows, so the plot doubles as an
+index into the evidence. A label inside the brackets is kept after the badge.
+
+Flags may cite items defined anywhere in the document; the renderer makes two
+passes. An unknown item, or an undeclared category, is reported on stderr. Nested
+ordered lists inside a category list are not supported.
+
+## Updating a document as the branch moves
+
+Annotations are written against a diff that is still changing. The workflow is
+to keep the sidecar next to the branch, rebuild with the new range, and read
+stderr:
+
+```bash
+uv run literate-diff --repo ../h2o --range prod...main -a notes.yaml -o out/review.html
+```
+
+Content anchors are chosen so most of them survive: they follow the line they
+name rather than a line number, so unrelated commits above them cost nothing.
+Three things do change, and each reports itself.
+
+**An anchor that no longer matches** warns and falls back to the top of its
+file, so the build still produces something readable rather than failing at the
+last step before you share it.
+
+**An anchor that now matches more than once** warns too, and this is the case
+worth understanding. It is not that the anchor breaks — it keeps working and
+starts meaning something else. The usual cause is a commit adding a comment
+that quotes the code, which lands *above* the line you meant:
+
+```
+w.yml: 'secrets: inherit' matches 2 rows; using the first (line 11).
+       Narrow the pattern or set `nth` to pin it.
+```
+
+Fix it by narrowing the pattern, or by setting `nth` if you want a later match.
+`nth: 1` does not silence this — restating the default is not evidence you
+counted the matches, and the whole point is to be told when the count changes.
+
+**New files** land wherever `*` sits, unannotated, and appear in the table of
+contents. Files that leave the diff are reported as `files:` keys that no
+longer match anything.
+
+Re-running `--outline` against the new range prints the current file list, which
+is a quick way to see what arrived.
+
 ## Layout notes
 
 Sidenotes are positioned in the right margin against their anchor line, pushed
@@ -138,14 +290,29 @@ reader's system setting.
 
 ## Example
 
-`examples/h2o-prod-to-main.yaml` annotates harvard-lil/h2o `prod...main`
-(88 files, 13 commits) and exercises every feature. Run it from a workspace
-where `h2o` is checked out alongside this repo:
+[`examples/feature-tour/`](examples/feature-tour/) is a small invented
+change, an app repository and an infrastructure repository as two patch
+files, annotated with every feature: sources, categories and flags, chapters,
+hiding and folding, sections, sidenotes, quotes, and each anchor form. The
+rendered output is committed beside it as
+[`feature-tour.html`](examples/feature-tour/feature-tour.html). Rebuild it
+from the repository root, since `diff:` paths resolve from the current
+directory:
 
 ```bash
-uv run literate-diff --repo ../h2o --range b10e1336...1e774212 \
-    -a examples/h2o-prod-to-main.yaml -o out/h2o.html
+uv run literate-diff -a examples/feature-tour/notes.yaml \
+    -o examples/feature-tour/feature-tour.html
 ```
+
+The test suite builds it and fails on any warning.
+
+## Writing one
+
+[`.agents/skills/literate-diff/SKILL.md`](.agents/skills/literate-diff/SKILL.md)
+is the working order for producing a document: choosing ranges and sources,
+reading the diff and the record behind it, writing the plot and its category
+lists, cutting chapters, annotating, and iterating on the build's warnings.
+It is written for an agent and reads as a checklist for a person.
 
 ## Development
 

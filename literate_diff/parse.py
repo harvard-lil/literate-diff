@@ -33,10 +33,12 @@ class FileDiff:
     deletions: int = 0
     lines: list[Line] = field(default_factory=list)
     mode_note: str = ""
+    source: str = ""  # name of the repo this came from, when there is more than one
 
     @property
     def key(self) -> str:
-        return self.path
+        """How the sidecar addresses this file: `source:path`, or a bare path."""
+        return f"{self.source}:{self.path}" if self.source else self.path
 
 
 def _strip_prefix(p: str) -> str:
@@ -45,7 +47,7 @@ def _strip_prefix(p: str) -> str:
     return p
 
 
-def parse_diff(text: str) -> list[FileDiff]:
+def parse_diff(text: str, source: str = "") -> list[FileDiff]:
     """Parse `git diff` output. Returns files in the order they appear."""
     files: list[FileDiff] = []
     cur: FileDiff | None = None
@@ -65,6 +67,7 @@ def parse_diff(text: str) -> list[FileDiff]:
                 old_path=_strip_prefix(old_p) if old_p else None,
                 new_path=_strip_prefix(new_p) if new_p else None,
                 status="modified",
+                source=source,
             )
             files.append(cur)
             old_no = new_no = 0

@@ -41,6 +41,16 @@ class SideNote:
 
 
 @dataclass
+class Chapter:
+    """A titled run of files. Carries the narrative between repos."""
+
+    title: str
+    note_md: str
+    anchor_id: str
+    start: int  # index into Document.files where this chapter begins
+
+
+@dataclass
 class AnnotatedFile:
     diff: FileDiff
     title: str = ""
@@ -59,7 +69,10 @@ class Document:
     files: list[AnnotatedFile]
     anchors: dict[str, Anchor]
     meta: dict
+    chapters: list[Chapter] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    # name -> {label, color, short}; see `categories:` in the README.
+    categories: dict[str, dict] = field(default_factory=dict)
 
 
 _slug_bad = re.compile(r"[^a-zA-Z0-9._-]+")
@@ -79,37 +92,113 @@ def load_annotations(path: str | None) -> dict:
     return data
 
 
-def _matches_any(path: str, patterns: list[str]) -> bool:
-    return any(fnmatch.fnmatch(path, p) for p in patterns)
+def matches(file: FileDiff, pattern: str) -> bool:
+    """Match a sidecar pattern against one file.
+
+    A pattern naming a source (`actions:ecs-build/**`) is matched against the
+    qualified key. A bare pattern (`**/dist/**`) is matched against the path
+    inside every source, so single-repo sidecars keep working unchanged and a
+    path glob means the same thing in each repo.
+    """
+    if ":" in pattern:
+        return fnmatch.fnmatch(file.key, pattern)
+    return fnmatch.fnmatch(file.path, pattern)
+
+
+def _matches_any(file: FileDiff, patterns: list[str]) -> bool:
+    return any(matches(file, p) for p in patterns)
+
+
+def _take(
+    remaining: list[FileDiff], patterns: list, warnings: list[str], label: str
+) -> tuple[list[FileDiff], int | None]:
+    """Pull the files matching `patterns` out of `remaining`, in pattern order.
+
+    Returns the picked files and the position of a `*` wildcard, if one appeared.
+    """
+    picked: list[FileDiff] = []
+    star_at: int | None = None
+    for pat in patterns or []:
+        if pat == "*":
+            star_at = len(picked)
+            continue
+        hits = [f for f in remaining if matches(f, pat)]
+        if not hits:
+            warnings.append(f"{label}: no file matched {pat!r}")
+        for f in hits:
+            remaining.remove(f)
+            picked.append(f)
+    return picked, star_at
 
 
 def order_files(files: list[FileDiff], spec: dict, warnings: list[str]) -> list[FileDiff]:
     """Apply `hide` and `order`. Files not named by `order` land at the `*` slot."""
+    ordered, _ = order_and_chapter(files, spec, warnings)
+    return ordered
+
+
+def order_and_chapter(
+    files: list[FileDiff], spec: dict, warnings: list[str]
+) -> tuple[list[FileDiff], list[dict]]:
+    """Order the files, and report where each chapter starts.
+
+    `chapters` and `order` are alternatives: chapters are an order list cut into
+    titled, annotated runs. When both are given, chapters win and `order` is
+    reported as ignored.
+    """
     hide = spec.get("hide") or []
-    kept = [f for f in files if not _matches_any(f.path, hide)]
+    remaining = [f for f in files if not _matches_any(f, hide)]
 
-    order = spec.get("order")
-    if not order:
-        return kept
+    chapters = spec.get("chapters")
+    if chapters and spec.get("order"):
+        warnings.append("both `chapters` and `order` are set; ignoring `order`")
 
-    remaining = list(kept)
+    if not chapters:
+        picked, star_at = _take(remaining, spec.get("order") or [], warnings, "order")
+        if not spec.get("order"):
+            return remaining, []
+        if star_at is None:
+            picked.extend(remaining)
+        else:
+            picked[star_at:star_at] = remaining
+        return picked, []
+
     result: list[FileDiff] = []
-    star_at: int | None = None
-    for pat in order:
-        if pat == "*":
-            star_at = len(result)
-            continue
-        picked = [f for f in remaining if fnmatch.fnmatch(f.path, pat)]
-        if not picked:
-            warnings.append(f"order: no file matched {pat!r}")
-        for f in picked:
-            remaining.remove(f)
-            result.append(f)
-    if star_at is None:
-        result.extend(remaining)
-    else:
-        result[star_at:star_at] = remaining
-    return result
+    marks: list[dict] = []
+    leftovers_at: tuple[int, int] | None = None  # (chapter position, file position)
+
+    for ci, chapter in enumerate(chapters):
+        if not isinstance(chapter, dict):
+            raise AnnotationError("each entry of `chapters` must be a mapping")
+        picked, star_at = _take(
+            remaining, chapter.get("files") or [], warnings, f"chapters[{ci}]"
+        )
+        marks.append(
+            {
+                "title": chapter.get("title", ""),
+                "note": chapter.get("note", "") or "",
+                "id": chapter.get("id"),
+                "start": len(result),
+            }
+        )
+        if star_at is not None:
+            leftovers_at = (ci, len(result) + star_at)
+        result.extend(picked)
+
+    if remaining:
+        if leftovers_at is None:
+            # Nothing claimed the remainder, so it becomes a closing untitled run.
+            marks.append({"title": "", "note": "", "id": None, "start": len(result)})
+            result.extend(remaining)
+        else:
+            owner, at = leftovers_at
+            result[at:at] = remaining
+            # Only chapters *after* the one whose `*` absorbed the remainder move;
+            # the owning chapter starts at the wildcard, so its own start holds.
+            for mi, mark in enumerate(marks):
+                if mi > owner:
+                    mark["start"] += len(remaining)
+    return result, marks
 
 
 # --- anchor resolution -------------------------------------------------------
@@ -121,7 +210,7 @@ def resolve_anchor(file: FileDiff, spec: dict | str, warnings: list[str]) -> Anc
         spec = {"at": spec}
     at = spec.get("at")
     if at is None:
-        raise AnnotationError(f"{file.path}: annotation is missing `at`")
+        raise AnnotationError(f"{file.key}: annotation is missing `at`")
 
     start = _find_row(file, at, int(spec.get("nth", 1)), warnings)
     end = start
@@ -139,12 +228,16 @@ def resolve_anchor(file: FileDiff, spec: dict | str, warnings: list[str]) -> Anc
 
 
 def _find_row(
-    file: FileDiff, at, nth: int, warnings: list[str], from_index: int = 0
+    file: FileDiff,
+    at,
+    nth: int,
+    warnings: list[str],
+    from_index: int = 0,
 ) -> int:
     """Locate a diff row. Supports substring, /regex/, +N, -N, and @N forms."""
     rows = file.lines
     if not rows:
-        raise AnnotationError(f"{file.path}: file has no diff rows to anchor to")
+        raise AnnotationError(f"{file.key}: file has no diff rows to anchor to")
 
     if isinstance(at, int):
         return _clamp(at, rows)
@@ -160,7 +253,7 @@ def _find_row(
         for i, line in enumerate(rows[from_index:], start=from_index):
             if getattr(line, side) == want:
                 return i
-        warnings.append(f"{file.path}: no line {at}; anchoring at start")
+        warnings.append(f"{file.key}: no line {at}; anchoring at start")
         return from_index
 
     if len(at) > 1 and at.startswith("/") and at.endswith("/"):
@@ -169,15 +262,29 @@ def _find_row(
     else:
         test = lambda s: at in s  # noqa: E731
 
-    hits = 0
-    for i, line in enumerate(rows[from_index:], start=from_index):
-        if line.kind in ("add", "del", "context", "hunk") and test(line.text):
-            hits += 1
-            if hits >= nth:
-                return i
+    hits = [
+        i
+        for i, line in enumerate(rows[from_index:], start=from_index)
+        if line.kind in ("add", "del", "context", "hunk") and test(line.text)
+    ]
+    if len(hits) >= nth:
+        # An anchor that matches more than once is only pinned by accident: a
+        # later commit adding an earlier match -- a comment quoting the code is
+        # the usual way -- silently moves it. Say so while the choice is still
+        # the intended one.
+        # `nth: 1` is the default restated, not evidence the author counted the
+        # matches; only nth >= 2 shows a deliberate choice among them.
+        if len(hits) > 1 and nth == 1:
+            warnings.append(
+                f"{file.key}: {at!r} matches {len(hits)} rows; using the first "
+                f"(line {rows[hits[0]].new_no or rows[hits[0]].old_no}). "
+                "Narrow the pattern or set `nth` to pin it."
+            )
+        return hits[nth - 1]
+
     warnings.append(
-        f"{file.path}: no match for {at!r}"
-        + (f" (occurrence {nth})" if nth > 1 else "")
+        f"{file.key}: no match for {at!r}"
+        + (f" (occurrence {nth}, {len(hits)} found)" if nth > 1 else "")
         + "; anchoring at start"
     )
     return from_index
@@ -187,18 +294,80 @@ def _clamp(i: int, rows: list[Line]) -> int:
     return max(0, min(i, len(rows) - 1))
 
 
+# --- categories --------------------------------------------------------------
+
+
+def normalize_categories(raw, warnings: list[str]) -> dict[str, dict]:
+    """`categories:` may give each entry as a label string or a mapping.
+
+    The result is keyed by the slug used in `{category: name}` markers and
+    `ldc:` flags. `color` is optional; the renderer fills it from a
+    colour-blind-safe palette in declaration order.
+    """
+    out: dict[str, dict] = {}
+    if raw is None:
+        return out
+    if not isinstance(raw, dict):
+        raise AnnotationError("`categories` must be a mapping of name -> label or settings")
+    for name, conf in raw.items():
+        if conf is None:
+            conf = {}
+        elif isinstance(conf, str):
+            conf = {"label": conf}
+        elif not isinstance(conf, dict):
+            raise AnnotationError(f"categories.{name}: expected a label or a mapping")
+        key = slug(str(name))
+        if key in out:
+            warnings.append(f"categories: {name!r} is declared twice")
+        out[key] = {
+            "label": str(conf.get("label") or name),
+            "color": conf.get("color"),
+            "short": str(conf.get("short") or ""),
+        }
+    return out
+
+
 # --- assembly ----------------------------------------------------------------
 
 
 def build_document(files: list[FileDiff], spec: dict, meta: dict) -> Document:
     warnings: list[str] = []
-    ordered = order_files(files, spec, warnings)
+    ordered, chapter_marks = order_and_chapter(files, spec, warnings)
+    categories = normalize_categories(spec.get("categories"), warnings)
     collapse_globs = spec.get("collapse") or []
     per_file = spec.get("files") or {}
 
+    # A `files:` key addresses a file by its qualified key, or by bare path when
+    # that is unambiguous across sources.
+    by_key: dict[str, FileDiff] = {}
+    for f in ordered:
+        by_key[f.key] = f
+    bare: dict[str, list[FileDiff]] = {}
+    for f in ordered:
+        bare.setdefault(f.path, []).append(f)
+
+    def lookup(name: str) -> FileDiff | None:
+        if name in by_key:
+            return by_key[name]
+        hits = bare.get(name) or []
+        if len(hits) == 1:
+            return hits[0]
+        if len(hits) > 1:
+            warnings.append(
+                f"files: {name!r} is ambiguous across sources "
+                f"({', '.join(sorted(h.key for h in hits))}); qualify it"
+            )
+        return None
+
     for name in per_file:
-        if not any(f.path == name for f in ordered):
+        if lookup(name) is None and not any(h for h in (bare.get(name) or [])):
             warnings.append(f"files: {name!r} is not in the diff (or was hidden)")
+
+    conf_for = {}
+    for name, conf in per_file.items():
+        f = lookup(name)
+        if f is not None:
+            conf_for[id(f)] = conf
 
     anchors: dict[str, Anchor] = {}
     out: list[AnnotatedFile] = []
@@ -212,17 +381,21 @@ def build_document(files: list[FileDiff], spec: dict, meta: dict) -> Document:
         return aid
 
     for fi, fd in enumerate(ordered):
-        conf = per_file.get(fd.path) or {}
+        conf = conf_for.get(id(fd)) or {}
         af = AnnotatedFile(
             diff=fd,
             title=conf.get("title", ""),
             note_md=conf.get("note", "") or "",
-            collapsed=bool(conf.get("collapsed", _matches_any(fd.path, collapse_globs))),
+            collapsed=bool(conf.get("collapsed", _matches_any(fd, collapse_globs))),
             anchor_id=f"f{fi}",
         )
         whole = Anchor(file=fd, start=0, end=max(0, len(fd.lines) - 1), anchor_id=af.anchor_id)
         anchors[af.anchor_id] = whole
-        anchors[slug("file:" + fd.path)] = whole
+        # Keyed by source, so two repos with the same path do not collide.
+        auto = slug("file:" + fd.key)
+        if auto in anchors:
+            warnings.append(f"two files share the automatic id {auto!r}")
+        anchors[auto] = whole
 
         for si, s in enumerate(conf.get("sections") or []):
             anchor = resolve_anchor(fd, s, warnings)
@@ -246,11 +419,25 @@ def build_document(files: list[FileDiff], spec: dict, meta: dict) -> Document:
         for a in conf.get("anchors") or []:
             anchor = resolve_anchor(fd, a, warnings)
             if not a.get("id"):
-                warnings.append(f"{fd.path}: `anchors` entry without an id is a no-op")
+                warnings.append(f"{fd.key}: `anchors` entry without an id is a no-op")
                 continue
             register(anchor, a["id"], "")
 
         out.append(af)
+
+    chapters: list[Chapter] = []
+    for ci, mark in enumerate(chapter_marks):
+        cid = slug(mark["id"]) if mark["id"] else f"c{ci}"
+        chapters.append(
+            Chapter(
+                title=mark["title"],
+                note_md=mark["note"],
+                anchor_id=cid,
+                start=mark["start"],
+            )
+        )
+        if mark["start"] < len(out):
+            anchors[cid] = anchors[f"f{mark['start']}"]
 
     return Document(
         title=spec.get("title") or meta.get("title") or "Literate diff",
@@ -259,5 +446,7 @@ def build_document(files: list[FileDiff], spec: dict, meta: dict) -> Document:
         files=out,
         anchors=anchors,
         meta=meta,
+        chapters=chapters,
         warnings=warnings,
+        categories=categories,
     )

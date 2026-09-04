@@ -166,6 +166,59 @@
     });
   });
 
+  /* --- category flags: hover shows the item being cited ---------------------- */
+
+  var tip = null;
+  function hideTip() {
+    if (tip) { tip.remove(); tip = null; }
+    document.querySelectorAll(".ld-flag-active").forEach(function (n) {
+      n.classList.remove("ld-flag-active");
+    });
+  }
+  function showTip(flag) {
+    hideTip();
+    var item = document.getElementById(flag.dataset.ldTarget);
+    if (!item) return;
+    var body = item.cloneNode(true);
+    body.querySelectorAll(".ld-cat-badge, .ld-cat-where").forEach(function (n) { n.remove(); });
+    body.removeAttribute("id");
+    tip = document.createElement("div");
+    tip.className = "ld-cat-tip";
+    tip.style.cssText = flag.style.cssText;
+    var head = document.createElement("div");
+    head.className = "ld-cat-tip-head";
+    head.textContent = (flag.getAttribute("title") || "").split(":")[0];
+    tip.appendChild(head);
+    var content = document.createElement("div");
+    content.innerHTML = body.innerHTML;
+    tip.appendChild(content);
+    document.body.appendChild(tip);
+    var r = flag.getBoundingClientRect();
+    var left = r.left + window.scrollX;
+    var maxLeft = window.scrollX + document.documentElement.clientWidth - tip.offsetWidth - 12;
+    tip.style.left = Math.max(window.scrollX + 8, Math.min(left, maxLeft)) + "px";
+    tip.style.top = (r.bottom + window.scrollY + 8) + "px";
+    flag.classList.add("ld-flag-active");
+    // The title attribute is kept for accessibility and no-JS readers; suppress
+    // the browser's own tooltip while ours is showing.
+    flag.dataset.ldTitle = flag.getAttribute("title");
+    flag.removeAttribute("title");
+  }
+  document.addEventListener("mouseover", function (ev) {
+    var flag = ev.target.closest && ev.target.closest(".ld-cat-flag");
+    if (flag) showTip(flag);
+  });
+  document.addEventListener("mouseout", function (ev) {
+    var flag = ev.target.closest && ev.target.closest(".ld-cat-flag");
+    if (!flag) return;
+    if (flag.dataset.ldTitle) {
+      flag.setAttribute("title", flag.dataset.ldTitle);
+      delete flag.dataset.ldTitle;
+    }
+    hideTip();
+  });
+  document.addEventListener("scroll", hideTip, true);
+
   /* --- table of contents current-file tracking ------------------------------ */
 
   function trackToc() {

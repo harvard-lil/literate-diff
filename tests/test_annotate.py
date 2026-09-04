@@ -169,3 +169,61 @@ def test_collapse_glob_marks_files_folded(files):
     doc = build_document(files, {"collapse": ["gen/**"]}, {})
     folded = {f.diff.path: f.collapsed for f in doc.files}
     assert folded == {"a.py": False, "b.py": False, "gen/bundle.js": True}
+
+
+# --- drift protection -------------------------------------------------------
+
+
+AMBIGUOUS = """\
+diff --git a/w.yml b/w.yml
+--- a/w.yml
++++ b/w.yml
+@@ -1,4 +1,6 @@
++  # a read-only token, rather than `secrets: inherit` for a branch build
+ jobs:
++  publish:
+     secrets: inherit
+"""
+
+
+def test_an_unpinned_anchor_matching_twice_warns():
+    # The drift that motivates this: a later commit adds a comment quoting the
+    # code, so an anchor that used to be unique silently moves to the comment.
+    (f,) = parse_diff(AMBIGUOUS)
+    warnings = []
+    a = resolve_anchor(f, {"at": "secrets: inherit"}, warnings)
+    assert len(warnings) == 1
+    assert "matches 2 rows" in warnings[0]
+    # It still resolves, to the first match, so the build is not blocked.
+    assert "read-only token" in f.lines[a.start].text
+
+
+def test_nth_1_does_not_count_as_pinning():
+    # Restating the default is not evidence the author counted the matches.
+    (f,) = parse_diff(AMBIGUOUS)
+    warnings = []
+    resolve_anchor(f, {"at": "secrets: inherit", "nth": 1}, warnings)
+    assert len(warnings) == 1
+
+
+def test_nth_2_is_a_deliberate_choice_and_stays_quiet():
+    (f,) = parse_diff(AMBIGUOUS)
+    warnings = []
+    a = resolve_anchor(f, {"at": "secrets: inherit", "nth": 2}, warnings)
+    assert warnings == []
+    assert f.lines[a.start].text.strip() == "secrets: inherit"
+
+
+def test_a_unique_anchor_stays_quiet():
+    (f,) = parse_diff(AMBIGUOUS)
+    warnings = []
+    resolve_anchor(f, {"at": "read-only token"}, warnings)
+    assert warnings == []
+
+
+def test_asking_past_the_last_match_reports_how_many_there_were():
+    (f,) = parse_diff(AMBIGUOUS)
+    warnings = []
+    a = resolve_anchor(f, {"at": "secrets: inherit", "nth": 5}, warnings)
+    assert a.start == 0
+    assert "2 found" in warnings[0]
