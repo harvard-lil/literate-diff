@@ -1,0 +1,146 @@
+diff --git a/.github/workflows/deploy.yml b/.github/workflows/deploy.yml
+index 46cae32..c65fc1d 100644
+--- a/.github/workflows/deploy.yml
++++ b/.github/workflows/deploy.yml
+@@ -2,17 +2,26 @@ name: Deploy
+ on:
+   push:
+     branches: [prod]
++permissions:
++  id-token: write
++  contents: read
+ jobs:
+   deploy:
+     runs-on: ubuntu-latest
+-    env:
+-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
++    environment: prod
+     steps:
+-      - uses: actions/checkout@v4
+-      - name: Build and push
++      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
++      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
++        with:
++          role-to-assume: ${{ vars.DEPLOY_ROLE }}
++          aws-region: us-east-1
++      # Promote, do not rebuild: resolve the commit's tag to a digest.
++      - name: Resolve the tested image
++        id: resolve
+         run: |
+-          docker build -t $REGISTRY/wren:latest .
+-          docker push $REGISTRY/wren:latest
+-      - name: Deploy
+-        run: aws ecs update-service --cluster wren --service wren --force-new-deployment
++          digest=$(aws ecr describe-images --repository-name wren \
++            --image-ids imageTag=${{ github.sha }} \
++            --query 'imageDetails[0].imageDigest' --output text)
++          echo "digest=$digest" >> "$GITHUB_OUTPUT"
++      - name: Deploy the digest-pinned task definition
++        run: ./scripts/deploy.sh "wren@${{ steps.resolve.outputs.digest }}"
+diff --git a/Dockerfile b/Dockerfile
+index 0883488..71f6ff2 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -1,7 +1,19 @@
+-FROM python:3.12-slim
++# base: dependencies only. Shared by every stage below.
++FROM python:3.12-slim AS base
+ WORKDIR /app
+ COPY requirements.txt .
+-RUN pip install -r requirements.txt
++RUN pip install --no-cache-dir -r requirements.txt
++
++# prod: the artifact that ships. Settings are chosen at runtime.
++FROM base AS prod
+ COPY app/ ./app
+-RUN cp app/settings_prod.py app/settings.py
++ENV WREN_SETTINGS_MODULE=settings_prod
+ CMD ["gunicorn", "app.wsgi"]
++
++# test: prod plus the test toolchain, so CI tests the bytes that ship.
++FROM prod AS test
++RUN pip install --no-cache-dir pytest
++
++# dev: base plus the toolchain, with the working tree mounted over it.
++FROM base AS dev
++RUN pip install --no-cache-dir pytest
+diff --git a/NOTES b/NOTES
+new file mode 100644
+index 0000000..cd77cc6
+--- /dev/null
++++ b/NOTES
+@@ -0,0 +1 @@
++no newline at the end
+\ No newline at end of file
+diff --git a/README.md b/README.md
+index ed85755..5a2cd94 100644
+--- a/README.md
++++ b/README.md
+@@ -1,5 +1,6 @@
+ # wren
+ 
+-Run `docker compose up` and visit http://localhost:8000.
++Run `docker compose up` and visit http://localhost:8000. The image is built
++locally, so a dependency change is picked up on the next start.
+ 
+-Deploys build a fresh image from the `prod` branch.
++Deploys promote the image CI tested; nothing is built at deploy time.
+diff --git a/app/__init__.py b/app/__init__.py
+new file mode 100644
+index 0000000..cccc4c9
+--- /dev/null
++++ b/app/__init__.py
+@@ -0,0 +1,6 @@
++import importlib
++import os
++
++# One image boots as any tier: the settings module is named at runtime.
++_module = os.environ.get("WREN_SETTINGS_MODULE", "settings_dev")
++settings = importlib.import_module(f"app.{_module}")
+diff --git a/app/settings.py b/app/settings.py
+deleted file mode 100644
+index 8403871..0000000
+--- a/app/settings.py
++++ /dev/null
+@@ -1,3 +0,0 @@
+-# Copied over at build time by the Dockerfile.
+-from .settings_base import *  # noqa
+-DEBUG = True
+diff --git a/app/settings_prod.py b/app/settings_prod.py
+index f5f89ae..eaf0527 100644
+--- a/app/settings_prod.py
++++ b/app/settings_prod.py
+@@ -1,3 +1,4 @@
+ from .settings_base import *  # noqa
+ DEBUG = False
+ ALLOWED_HOSTS = ["wren.example.org"]
++STATIC_URL = "https://static.wren.example.org/static/"
+diff --git a/dist/bundle.js b/dist/bundle.js
+deleted file mode 100644
+index 348d12c..0000000
+--- a/dist/bundle.js
++++ /dev/null
+@@ -1 +0,0 @@
+-console.log("built 2026-08-01")
+diff --git a/requirements.lock b/requirements.lock
+index 70470e8..c09e128 100644
+--- a/requirements.lock
++++ b/requirements.lock
+@@ -1,4 +1,6 @@
+-certifi==2024.2.2
++blinker==1.8.2
++certifi==2024.7.4
+ click==8.1.7
+-flask==3.0.0
++flask==3.0.1
+ gunicorn==22.0.0
++itsdangerous==2.2.0
+diff --git a/requirements.txt b/requirements.txt
+index 9511216..73c868f 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,2 +1,2 @@
+-flask==3.0.0
++flask==3.0.1
+ gunicorn==22.0.0

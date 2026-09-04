@@ -67,6 +67,7 @@ body {
   font-size: 0.8rem;
   line-height: 1.35;
 }
+.ld-toc { counter-reset: ldtoc; }
 .ld-toc-head {
   font-family: var(--mono);
   font-size: 0.65rem;
@@ -85,7 +86,6 @@ body {
   font-size: 0.7em;
   margin-right: 0.35em;
 }
-.ld-toc-list { counter-reset: ldtoc; }
 .ld-toc-name { display: block; }
 .ld-toc-path {
   display: block;
@@ -377,3 +377,137 @@ table.ld-diff {
   margin: 0;
   font-family: var(--serif);
 }
+
+/* ---- multi-repo: source badges ---- */
+
+.ld-src {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.ld-sources {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.ld-source-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+}
+.ld-source-row .ld-range { color: var(--ink-soft); }
+.ld-src-count { margin-left: auto; }
+.ld-toc-src {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  color: var(--accent);
+  margin-right: 0.35em;
+}
+.ld-qhead .ld-src { font-size: 0.58rem; }
+
+/* ---- multi-repo: chapters ---- */
+
+.ld-chapter {
+  max-width: 42rem;
+  margin: 3.5rem auto 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 2px solid var(--rule-strong);
+}
+.ld-file + .ld-chapter { margin-top: 4rem; }
+.ld-chapter-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.4rem;
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+}
+.ld-chapter-note > :first-child { margin-top: 0; }
+.ld-chapter-note > :last-child { margin-bottom: 0; }
+.ld-toc-chapter {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.ld-toc-chapter a { color: var(--ink); text-decoration: none; }
+.ld-toc-chapter a:hover { color: var(--accent); }
+.ld-toc-list + .ld-toc-chapter { margin-top: 1.1rem; }
+
+/* ---- categories: numbered, coloured lists and the flags that cite them ---- */
+
+.ld-cat-list { list-style: none; padding-left: 0; margin: 0.5rem 0 1.25rem; }
+.ld-cat-list > li { position: relative; padding-left: 2.8em; margin: 0 0 0.55rem; }
+.ld-cat-list > li > p { margin: 0 0 0.35rem; }
+.ld-cat-list > li > .ld-cat-badge { position: absolute; left: 0; top: 0.2em; }
+.ld-cat-badge {
+  display: inline-block;
+  min-width: 2em;
+  padding: 0 0.5em;
+  border-radius: 999px;
+  background: var(--cat, var(--accent));
+  color: var(--cat-ink, #fff);
+  font-family: var(--mono);
+  font-size: 0.72em;
+  font-weight: 600;
+  line-height: 1.65;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: 0.12em;
+}
+.ld-cat-flag {
+  text-decoration: none;
+  color: inherit;
+  cursor: help;
+  white-space: nowrap;
+}
+.ld-cat-flag .ld-cat-badge { transition: box-shadow 0.12s; }
+.ld-cat-flag:hover .ld-cat-badge,
+.ld-cat-flag.ld-flag-active .ld-cat-badge { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--cat); }
+.ld-cat-flag-label { margin-left: 0.35em; color: var(--accent); border-bottom: 1px solid var(--accent-soft); }
+.ld-cat-where {
+  display: block;
+  margin-top: 0.15rem;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+}
+.ld-cat-where::before { content: "where: "; }
+.ld-cat-where a { color: var(--accent); text-decoration: none; margin-right: 0.7em; }
+.ld-cat-where a:hover { text-decoration: underline; }
+li:target > .ld-cat-badge, .ld-cat-list > li.ld-flash { animation: ld-flash 1.6s ease-out; }
+
+.ld-cat-tip {
+  position: absolute;
+  z-index: 30;
+  max-width: 26rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--rule-strong);
+  border-left: 4px solid var(--cat, var(--accent));
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+  pointer-events: none;
+}
+.ld-cat-tip-head {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 0.3rem;
+}
+.ld-cat-tip p { margin: 0 0 0.4rem; }
+.ld-cat-tip > :last-child, .ld-cat-tip p:last-child { margin-bottom: 0; }

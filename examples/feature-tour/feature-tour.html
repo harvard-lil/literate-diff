@@ -1,0 +1,954 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Promote, do not rebuild</title>
+<style>:root {
+  --bg: #fbfaf7;
+  --paper: #ffffff;
+  --ink: #1c1c1a;
+  --ink-soft: #55534d;
+  --ink-faint: #8a8780;
+  --rule: #e2ded4;
+  --rule-strong: #cfcabb;
+  --accent: #6b4f1d;
+  --accent-soft: #f0e6cf;
+  --add-bg: #e9f6ec;
+  --add-mark: #2c7a3f;
+  --del-bg: #fdecec;
+  --del-mark: #b03030;
+  --hunk-bg: #f2f0ea;
+  --note-bg: #fdfcf8;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --gutter-w: 20rem;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16161a;
+    --paper: #1c1c21;
+    --ink: #e6e3dc;
+    --ink-soft: #a9a59c;
+    --ink-faint: #77736b;
+    --rule: #32323a;
+    --rule-strong: #45454f;
+    --accent: #d8bd80;
+    --accent-soft: #33301f;
+    --add-bg: #17301f;
+    --add-mark: #6cc189;
+    --del-bg: #331b1b;
+    --del-mark: #e08585;
+    --hunk-bg: #26262c;
+    --note-bg: #1f1f25;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.55;
+  -webkit-text-size-adjust: 100%;
+}
+
+.ld-app { display: flex; align-items: flex-start; }
+
+/* ---- table of contents ---- */
+
+.ld-toc {
+  position: sticky;
+  top: 0;
+  flex: 0 0 15rem;
+  max-height: 100vh;
+  overflow-y: auto;
+  padding: 1.5rem 0.75rem 3rem 1.25rem;
+  border-right: 1px solid var(--rule);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+.ld-toc { counter-reset: ldtoc; }
+.ld-toc-head {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 0.75rem;
+}
+.ld-toc-list, .ld-toc-sub { list-style: none; margin: 0; padding: 0; }
+.ld-toc-file { counter-increment: ldtoc; margin-bottom: 0.55rem; }
+.ld-toc-file > a { display: block; text-decoration: none; color: var(--ink-soft); }
+.ld-toc-file > a::before {
+  content: counter(ldtoc) ".";
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 0.7em;
+  margin-right: 0.35em;
+}
+.ld-toc-name { display: block; }
+.ld-toc-path {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--ink-faint);
+  word-break: break-all;
+  margin-left: 1.1em;
+}
+.ld-toc-file > a:hover .ld-toc-name { color: var(--accent); text-decoration: underline; }
+.ld-toc-file.ld-current > a .ld-toc-name { color: var(--ink); font-weight: 600; }
+.ld-toc-sub { margin: 0.2rem 0 0 1.1em; }
+.ld-toc-sub a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  display: block;
+  padding: 0.1rem 0;
+  border-left: 2px solid var(--rule);
+  padding-left: 0.5em;
+}
+.ld-toc-sub a:hover { color: var(--accent); border-left-color: var(--accent); }
+
+/* ---- main column ---- */
+
+.ld-main { flex: 1 1 auto; min-width: 0; padding: 2.5rem 2rem 6rem; }
+
+.ld-header { max-width: 42rem; margin: 0 auto 3rem; }
+.ld-header h1 { font-size: 2rem; line-height: 1.15; margin: 0 0 0.35rem; letter-spacing: -0.01em; }
+.ld-subtitle { margin: 0 0 0.75rem; color: var(--ink-soft); font-size: 1.15rem; }
+.ld-metaline {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+  padding-bottom: 1.25rem;
+  border-bottom: 2px solid var(--rule-strong);
+}
+.ld-range { color: var(--ink-soft); }
+.ld-plot { margin-top: 1.75rem; }
+.ld-plot > :first-child { margin-top: 0; }
+.ld-plot p { margin: 0 0 1rem; }
+.ld-plot h2 {
+  font-size: 1.15rem;
+  margin: 1.75rem 0 0.5rem;
+  letter-spacing: 0.01em;
+}
+
+/* ---- file sections ---- */
+
+.ld-file { margin: 0 auto 2.5rem; max-width: calc(60rem + var(--gutter-w)); }
+.ld-filenote { max-width: 42rem; margin: 0 auto 1.25rem; }
+.ld-filenote > :first-child { margin-top: 0; }
+.ld-filenote > :last-child { margin-bottom: 0; }
+
+.ld-fileblock {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: visible;
+}
+.ld-filehead {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.85rem;
+  cursor: pointer;
+  list-style: none;
+  border-bottom: 1px solid var(--rule);
+  position: sticky;
+  top: 0;
+  background: var(--paper);
+  border-radius: 8px 8px 0 0;
+  z-index: 3;
+}
+.ld-filehead::-webkit-details-marker { display: none; }
+.ld-fileblock:not([open]) .ld-filehead { border-bottom: none; border-radius: 8px; }
+.ld-chev { color: var(--ink-faint); font-size: 0.7rem; transition: transform 0.12s; }
+.ld-fileblock[open] .ld-chev { transform: rotate(90deg); }
+.ld-path { font-family: var(--mono); font-size: 0.8rem; word-break: break-all; }
+.ld-filetitle { color: var(--ink-soft); font-size: 0.85rem; }
+.ld-rename { color: var(--ink-faint); font-size: 0.75rem; }
+.ld-rename code { font-family: var(--mono); }
+.ld-spacer { flex: 1 1 auto; }
+.ld-badge {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+.ld-badge-add { color: var(--add-mark); }
+.ld-badge-del { color: var(--del-mark); }
+.ld-badge-ren { color: var(--accent); }
+.ld-stat { font-family: var(--mono); font-size: 0.72rem; margin-left: 0.4rem; }
+.ld-stat-add { color: var(--add-mark); }
+.ld-stat-del { color: var(--del-mark); }
+
+/* ---- diff body + note gutter ---- */
+
+.ld-body { display: flex; align-items: flex-start; gap: 1rem; padding: 0 0 0.5rem; }
+.ld-diffwrap { flex: 1 1 auto; min-width: 0; overflow-x: auto; }
+.ld-gutter {
+  flex: 0 0 var(--gutter-w);
+  position: relative;
+  align-self: stretch;
+  padding-right: 0.5rem;
+}
+
+table.ld-diff {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.ld-row td { padding: 0 0.35rem; vertical-align: top; }
+.ld-no {
+  width: 1%;
+  min-width: 3ch;
+  text-align: right;
+  color: var(--ink-faint);
+  user-select: none;
+  border-right: 1px solid var(--rule);
+  font-size: 0.7rem;
+  padding-top: 0.05rem !important;
+}
+.ld-text { white-space: pre-wrap; word-break: break-word; padding-left: 0.5rem !important; }
+.ld-sign { display: inline-block; width: 1ch; color: var(--ink-faint); user-select: none; }
+.ld-add { background: var(--add-bg); }
+.ld-add .ld-sign { color: var(--add-mark); }
+.ld-del { background: var(--del-bg); }
+.ld-del .ld-sign { color: var(--del-mark); }
+.ld-hunk td { background: var(--hunk-bg); color: var(--ink-faint); font-size: 0.7rem; padding: 0.15rem 0.35rem; }
+.ld-hunk .ld-text { color: var(--ink-faint); }
+.ld-message td { color: var(--ink-faint); font-style: italic; font-size: 0.7rem; }
+
+.ld-marked { box-shadow: inset 3px 0 0 var(--accent); }
+.ld-flash { animation: ld-flash 1.6s ease-out; }
+@keyframes ld-flash {
+  0%, 35% { background-color: var(--accent-soft); }
+  100% { background-color: transparent; }
+}
+
+/* ---- section rects ---- */
+
+.ld-sectionrow td { padding: 1.1rem 0.5rem 0.6rem !important; }
+.ld-section {
+  border: 1px solid var(--rule-strong);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  background: var(--note-bg);
+  padding: 0.7rem 1rem;
+  font-family: var(--serif);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.ld-section-title {
+  margin: 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+}
+.ld-section-note { color: var(--ink-soft); margin-top: 0.3rem; }
+.ld-section-note > :first-child { margin-top: 0; }
+.ld-section-note > :last-child { margin-bottom: 0; }
+
+/* ---- sidenotes ---- */
+
+.ld-note {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  border-left: 2px solid var(--rule-strong);
+  padding: 0.1rem 0 0.1rem 0.7rem;
+  transition: top 0.15s ease;
+}
+.ld-note > :first-child { margin-top: 0; }
+.ld-note > :last-child { margin-bottom: 0; }
+.ld-note p { margin: 0 0 0.5rem; }
+.ld-note.ld-note-active { border-left-color: var(--accent); color: var(--ink); }
+
+/* ---- references and quotes ---- */
+
+.ld-ref {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent-soft);
+}
+.ld-ref:hover { border-bottom-color: var(--accent); }
+.ld-arrow { font-size: 0.85em; margin-right: 0.15em; opacity: 0.75; }
+.ld-ref-broken { color: var(--del-mark); border-bottom: 1px dotted var(--del-mark); cursor: help; }
+
+.ld-quote { display: inline; }
+.ld-quote-btn {
+  font: inherit;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: none;
+  border-radius: 3px;
+  padding: 0 0.3em;
+  cursor: pointer;
+}
+.ld-quote-btn::after { content: " ⌄"; font-size: 0.8em; opacity: 0.7; }
+.ld-quote-btn[aria-expanded="true"]::after { content: " ⌃"; }
+.ld-quote-body {
+  display: block;
+  margin: 0.4rem 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  background: var(--paper);
+}
+.ld-quote-body[hidden] { display: none; }
+.ld-qhead {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--hunk-bg);
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.68rem;
+  color: var(--ink-faint);
+}
+.ld-qhead code { word-break: break-all; }
+.ld-qjump { color: var(--accent); text-decoration: none; white-space: nowrap; }
+.ld-qrow { display: flex; }
+.ld-qno {
+  flex: 0 0 3.5ch;
+  text-align: right;
+  padding-right: 0.4rem;
+  color: var(--ink-faint);
+  border-right: 1px solid var(--rule);
+  user-select: none;
+}
+.ld-qsign { flex: 0 0 1.6ch; text-align: center; user-select: none; }
+.ld-qtext { flex: 1 1 auto; white-space: pre-wrap; word-break: break-word; padding-right: 0.4rem; }
+.ld-quote-body .ld-add { background: var(--add-bg); }
+.ld-quote-body .ld-del { background: var(--del-bg); }
+
+.ld-footer {
+  max-width: 42rem;
+  margin: 4rem auto 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+}
+
+/* ---- narrow screens: notes flow inline ---- */
+
+@media (max-width: 62rem) {
+  .ld-toc {
+    position: static;
+    flex-basis: auto;
+    width: 100%;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+  }
+  .ld-app { flex-direction: column; }
+  .ld-main { padding: 1.5rem 1rem 4rem; width: 100%; }
+  .ld-body { flex-direction: column; gap: 0; }
+  .ld-gutter { flex-basis: auto; width: 100%; padding: 0 0.75rem; }
+  .ld-note {
+    position: static !important;
+    width: auto;
+    margin: 0.5rem 0;
+    background: var(--note-bg);
+    padding: 0.5rem 0.7rem;
+    border-radius: 0 6px 6px 0;
+  }
+}
+
+/* Sidenotes folded into the table on narrow screens. */
+.ld-noterow-cell {
+  padding: 0.35rem 0.6rem 0.55rem 2.5rem !important;
+  background: var(--note-bg);
+}
+.ld-noterow-cell .ld-note {
+  position: static !important;
+  width: auto;
+  margin: 0;
+  font-family: var(--serif);
+}
+
+/* ---- multi-repo: source badges ---- */
+
+.ld-src {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.ld-sources {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.ld-source-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+}
+.ld-source-row .ld-range { color: var(--ink-soft); }
+.ld-src-count { margin-left: auto; }
+.ld-toc-src {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  color: var(--accent);
+  margin-right: 0.35em;
+}
+.ld-qhead .ld-src { font-size: 0.58rem; }
+
+/* ---- multi-repo: chapters ---- */
+
+.ld-chapter {
+  max-width: 42rem;
+  margin: 3.5rem auto 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 2px solid var(--rule-strong);
+}
+.ld-file + .ld-chapter { margin-top: 4rem; }
+.ld-chapter-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.4rem;
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+}
+.ld-chapter-note > :first-child { margin-top: 0; }
+.ld-chapter-note > :last-child { margin-bottom: 0; }
+.ld-toc-chapter {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.ld-toc-chapter a { color: var(--ink); text-decoration: none; }
+.ld-toc-chapter a:hover { color: var(--accent); }
+.ld-toc-list + .ld-toc-chapter { margin-top: 1.1rem; }
+
+/* ---- categories: numbered, coloured lists and the flags that cite them ---- */
+
+.ld-cat-list { list-style: none; padding-left: 0; margin: 0.5rem 0 1.25rem; }
+.ld-cat-list > li { position: relative; padding-left: 2.8em; margin: 0 0 0.55rem; }
+.ld-cat-list > li > p { margin: 0 0 0.35rem; }
+.ld-cat-list > li > .ld-cat-badge { position: absolute; left: 0; top: 0.2em; }
+.ld-cat-badge {
+  display: inline-block;
+  min-width: 2em;
+  padding: 0 0.5em;
+  border-radius: 999px;
+  background: var(--cat, var(--accent));
+  color: var(--cat-ink, #fff);
+  font-family: var(--mono);
+  font-size: 0.72em;
+  font-weight: 600;
+  line-height: 1.65;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: 0.12em;
+}
+.ld-cat-flag {
+  text-decoration: none;
+  color: inherit;
+  cursor: help;
+  white-space: nowrap;
+}
+.ld-cat-flag .ld-cat-badge { transition: box-shadow 0.12s; }
+.ld-cat-flag:hover .ld-cat-badge,
+.ld-cat-flag.ld-flag-active .ld-cat-badge { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--cat); }
+.ld-cat-flag-label { margin-left: 0.35em; color: var(--accent); border-bottom: 1px solid var(--accent-soft); }
+.ld-cat-where {
+  display: block;
+  margin-top: 0.15rem;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+}
+.ld-cat-where::before { content: "where: "; }
+.ld-cat-where a { color: var(--accent); text-decoration: none; margin-right: 0.7em; }
+.ld-cat-where a:hover { text-decoration: underline; }
+li:target > .ld-cat-badge, .ld-cat-list > li.ld-flash { animation: ld-flash 1.6s ease-out; }
+
+.ld-cat-tip {
+  position: absolute;
+  z-index: 30;
+  max-width: 26rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--rule-strong);
+  border-left: 4px solid var(--cat, var(--accent));
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+  pointer-events: none;
+}
+.ld-cat-tip-head {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 0.3rem;
+}
+.ld-cat-tip p { margin: 0 0 0.4rem; }
+.ld-cat-tip > :last-child, .ld-cat-tip p:last-child { margin-bottom: 0; }
+</style>
+</head><body>
+<div class="ld-app">
+<nav class="ld-toc" aria-label="Contents">
+  <div class="ld-toc-head">Contents</div>
+  <div class="ld-toc-chapter"><a href="#ch-registry" data-ld-target="ch-registry">1. A registry that keeps its promises</a></div><ol class="ld-toc-list"><li class="ld-toc-file"><a href="#f0" data-ld-target="f0"><span class="ld-toc-name">immutable tags, split retention</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>ecr.tf</span></a><ul class="ld-toc-sub"><li><a href="#retention-split" data-ld-target="retention-split">Deployed images and build candidates on separate rules</a></li></ul></li><li class="ld-toc-file"><a href="#f1" data-ld-target="f1"><span class="ld-toc-name">who may deploy</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>iam.tf</span></a></li></ol><div class="ld-toc-chapter"><a href="#ch-image" data-ld-target="ch-image">2. One image for every tier</a></div><ol class="ld-toc-list"><li class="ld-toc-file"><a href="#f2" data-ld-target="f2"><span class="ld-toc-name">four stages, one build graph</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>Dockerfile</span></a><ul class="ld-toc-sub"><li><a href="#stage-prod" data-ld-target="stage-prod">prod: the artifact that ships</a></li><li><a href="#stage-test" data-ld-target="stage-test">test: what CI runs the suite against</a></li><li><a href="#f2s2" data-ld-target="f2s2">dev: built locally, working tree mounted over it</a></li></ul></li><li class="ld-toc-file"><a href="#f3" data-ld-target="f3"><span class="ld-toc-name">the settings selector</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>app/__init__.py</span></a></li><li class="ld-toc-file"><a href="#f4" data-ld-target="f4"><span class="ld-toc-name">settings.py</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>app/settings.py</span></a></li><li class="ld-toc-file"><a href="#f5" data-ld-target="f5"><span class="ld-toc-name">settings_prod.py</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>app/settings_prod.py</span></a></li></ol><div class="ld-toc-chapter"><a href="#ch-deploy" data-ld-target="ch-deploy">3. The deploy stops building</a></div><ol class="ld-toc-list"><li class="ld-toc-file"><a href="#f6" data-ld-target="f6"><span class="ld-toc-name">promote, do not rebuild</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>.github/workflows/deploy.yml</span></a><ul class="ld-toc-sub"><li><a href="#resolve" data-ld-target="resolve">Resolve the tested image</a></li></ul></li><li class="ld-toc-file"><a href="#f7" data-ld-target="f7"><span class="ld-toc-name">faster checks, shorter drain</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>ingress.tf</span></a></li><li class="ld-toc-file"><a href="#f8" data-ld-target="f8"><span class="ld-toc-name">the maintenance page, removed</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>maintenance.tf</span></a></li></ol><div class="ld-toc-chapter"><a href="#ch-c3" data-ld-target="ch-c3">Housekeeping</a></div><ol class="ld-toc-list"><li class="ld-toc-file"><a href="#f9" data-ld-target="f9"><span class="ld-toc-name">NOTES</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>NOTES</span></a></li><li class="ld-toc-file"><a href="#f10" data-ld-target="f10"><span class="ld-toc-name">README.md</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>README.md</span></a></li><li class="ld-toc-file"><a href="#f11" data-ld-target="f11"><span class="ld-toc-name">bundle.js</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>dist/bundle.js</span></a></li><li class="ld-toc-file"><a href="#f12" data-ld-target="f12"><span class="ld-toc-name">requirements.lock</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>requirements.lock</span></a></li><li class="ld-toc-file"><a href="#f13" data-ld-target="f13"><span class="ld-toc-name">requirements.txt</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>requirements.txt</span></a></li><li class="ld-toc-file"><a href="#f14" data-ld-target="f14"><span class="ld-toc-name">maintenance-page.png</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>maintenance-page.png</span></a></li><li class="ld-toc-file"><a href="#f15" data-ld-target="f15"><span class="ld-toc-name">variables.tf</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>variables.tf</span></a></li></ol>
+</nav>
+<main class="ld-main">
+  <header class="ld-header">
+    <h1>Promote, do not rebuild</h1>
+    <p class="ld-subtitle">A feature tour of literate-diff on an invented two-repository change</p>
+    <div class="ld-metaline">2 repos · 16 files · <span class="ld-stat-add">+80</span> · <span class="ld-stat-del">−46</span></div>
+    <div class="ld-sources"><div class="ld-source-row"><span class="ld-src">wren</span><code class="ld-range">prod...main</code><span class="ld-src-count">10 files</span></div><div class="ld-source-row"><span class="ld-src">wren-terraform</span><code class="ld-range">main...deploy-by-digest</code><span class="ld-src-count">6 files</span></div></div>
+    <div class="ld-plot"><p>Before this change, every deploy built a fresh image on the <code>prod</code> branch
+and pushed it as <code>latest</code>, with production settings copied into the image
+at build time and long-lived AWS keys in the workflow. The suite never ran
+against the bytes that shipped.</p>
+<p>After it, CI builds one image per commit, tests the <code>test</code> stage that is
+built from <code>prod</code>, and publishes it tagged with the commit. The deploy
+resolves that tag to a digest and ships the digest. The registry refuses to
+move a commit tag, keeps deployed images longer than candidates, and the
+deploy role trusts one GitHub environment rather than every branch.</p>
+<p>The chapters run in dependency order: the registry has to accept immutable
+tags before the workflow can rely on them.</p>
+<h2>Wins</h2>
+<p>Each item recurs as a coloured number where it is delivered; hover the
+number to see the item, click to come back. Each item lists where it is
+flagged.</p>
+<h3>Security</h3>
+<ol class="ld-cat-list" data-ld-cat="security" style="--cat:#332288;--cat-ink:#ffffff"><li id="cat-oidc" data-ld-cat="security"><span class="ld-cat-badge" style="--cat:#332288;--cat-ink:#ffffff" title="Security 1">S1</span>Before, the deploy trusted <code>repo:example/wren:*</code>, so any branch
+could assume the deploy role. It now trusts the <code>prod</code> environment only.<span class="ld-cat-where"><a class="ld-ref ld-ref-forward" href="#flag-oidc-1" data-ld-target="flag-oidc-1"><span class="ld-arrow" aria-hidden="true">↓</span>iam.tf</a> <a class="ld-ref ld-ref-forward" href="#flag-oidc-2" data-ld-target="flag-oidc-2"><span class="ld-arrow" aria-hidden="true">↓</span>deploy.yml</a></span></li><li id="cat-no-keys" data-ld-cat="security"><span class="ld-cat-badge" style="--cat:#332288;--cat-ink:#ffffff" title="Security 2">S2</span>Before, the workflow carried long-lived access keys as
+repository secrets. It now assumes a role over OIDC.<span class="ld-cat-where"><a class="ld-ref ld-ref-forward" href="#flag-no-keys-1" data-ld-target="flag-no-keys-1"><span class="ld-arrow" aria-hidden="true">↓</span>deploy.yml</a> <a class="ld-ref ld-ref-forward" href="#flag-no-keys-2" data-ld-target="flag-no-keys-2"><span class="ld-arrow" aria-hidden="true">↓</span>deploy.yml</a></span></li><li id="cat-sha-pins" data-ld-cat="security"><span class="ld-cat-badge" style="--cat:#332288;--cat-ink:#ffffff" title="Security 3">S3</span>Before, actions were referenced by tag. They are pinned to a
+commit SHA.<span class="ld-cat-where"><a class="ld-ref ld-ref-forward" href="#flag-sha-pins-1" data-ld-target="flag-sha-pins-1"><span class="ld-arrow" aria-hidden="true">↓</span>deploy.yml</a> <a class="ld-ref ld-ref-forward" href="#flag-sha-pins-2" data-ld-target="flag-sha-pins-2"><span class="ld-arrow" aria-hidden="true">↓</span>deploy.yml</a></span></li></ol>
+<h3>Correctness</h3>
+<ol class="ld-cat-list" data-ld-cat="correctness" style="--cat:#CC6677;--cat-ink:#ffffff"><li id="cat-same-bytes" data-ld-cat="correctness"><span class="ld-cat-badge" style="--cat:#CC6677;--cat-ink:#ffffff" title="Correctness 1">C1</span>Before, the deploy rebuilt the image, so the bytes tested
+and the bytes shipped were two builds of the same source. The deploy
+now promotes the image CI tested, by digest.<span class="ld-cat-where"><a class="ld-ref ld-ref-forward" href="#flag-same-bytes-1" data-ld-target="flag-same-bytes-1"><span class="ld-arrow" aria-hidden="true">↓</span>Dockerfile</a> <a class="ld-ref ld-ref-forward" href="#flag-same-bytes-2" data-ld-target="flag-same-bytes-2"><span class="ld-arrow" aria-hidden="true">↓</span>deploy.yml</a></span></li><li id="cat-runtime-settings" data-ld-cat="correctness"><span class="ld-cat-badge" style="--cat:#CC6677;--cat-ink:#ffffff" title="Correctness 2">C2</span>Before, the production settings module was copied
+over <code>settings.py</code> at build time, so one image could only ever be
+production. The module is named at runtime, and one image boots as any
+tier.<span class="ld-cat-where"><a class="ld-ref ld-ref-forward" href="#flag-runtime-settings-1" data-ld-target="flag-runtime-settings-1"><span class="ld-arrow" aria-hidden="true">↓</span>Dockerfile</a> <a class="ld-ref ld-ref-forward" href="#flag-runtime-settings-2" data-ld-target="flag-runtime-settings-2"><span class="ld-arrow" aria-hidden="true">↓</span>__init__.py</a></span></li></ol>
+<h3>Reliability</h3>
+<ol class="ld-cat-list" data-ld-cat="reliability" style="--cat:#117733;--cat-ink:#ffffff"><li id="cat-immutable" data-ld-cat="reliability"><span class="ld-cat-badge" style="--cat:#117733;--cat-ink:#ffffff" title="Reliability 1">R1</span>Before, a re-run could repoint a commit tag at different
+bytes. Commit tags are immutable; only <code>latest</code> moves.<span class="ld-cat-where"><a class="ld-ref ld-ref-forward" href="#flag-immutable-1" data-ld-target="flag-immutable-1"><span class="ld-arrow" aria-hidden="true">↓</span>ecr.tf</a></span></li><li id="cat-retention" data-ld-cat="reliability"><span class="ld-cat-badge" style="--cat:#117733;--cat-ink:#ffffff" title="Reliability 2">R2</span>Before, &quot;keep last 5&quot; expired the image production was
+running as soon as five more merges landed. Deployed images now age on
+their own rule.<span class="ld-cat-where"><a class="ld-ref ld-ref-forward" href="#flag-retention-1" data-ld-target="flag-retention-1"><span class="ld-arrow" aria-hidden="true">↓</span>ecr.tf</a></span></li><li id="cat-health" data-ld-cat="reliability"><span class="ld-cat-badge" style="--cat:#117733;--cat-ink:#ffffff" title="Reliability 3">R3</span>Before, health checks ran once a minute and old tasks drained
+for five minutes. Checks run every 15 seconds and the drain is 120,
+since the CDN gives up on an origin at about 100.<span class="ld-cat-where"><a class="ld-ref ld-ref-forward" href="#flag-health-1" data-ld-target="flag-health-1"><span class="ld-arrow" aria-hidden="true">↓</span>ingress.tf</a></span></li></ol>
+<h2>The other side</h2>
+<h3>Regressions</h3>
+<ol class="ld-cat-list" data-ld-cat="regression" style="--cat:#555555;--cat-ink:#ffffff"><li id="cat-first-build" data-ld-cat="regression"><span class="ld-cat-badge" style="--cat:#555555;--cat-ink:#ffffff" title="Regression 1">X1</span>The dev image is no longer pulled, so a first checkout
+builds it, and a dependency change rebuilds it.<span class="ld-cat-where"><a class="ld-ref ld-ref-forward" href="#flag-first-build-1" data-ld-target="flag-first-build-1"><span class="ld-arrow" aria-hidden="true">↓</span>dev: built locally, working tree mounted over it</a> <a class="ld-ref ld-ref-forward" href="#flag-first-build-2" data-ld-target="flag-first-build-2"><span class="ld-arrow" aria-hidden="true">↓</span>README.md</a></span></li><li id="cat-no-maintenance" data-ld-cat="regression"><span class="ld-cat-badge" style="--cat:#555555;--cat-ink:#ffffff" title="Regression 2">X2</span>The maintenance page went with the second target
+group. There is no maintenance mode until an edge-served one exists.<span class="ld-cat-where"><a class="ld-ref ld-ref-forward" href="#flag-no-maintenance-1" data-ld-target="flag-no-maintenance-1"><span class="ld-arrow" aria-hidden="true">↓</span>maintenance.tf</a></span></li></ol>
+<h3>Future work</h3>
+<ol class="ld-cat-list" data-ld-cat="future" style="--cat:#BBBBBB;--cat-ink:#1c1c1a"><li id="cat-edge-maint" data-ld-cat="future"><span class="ld-cat-badge" style="--cat:#BBBBBB;--cat-ink:#1c1c1a" title="Future work 1">F1</span>A maintenance page held at the CDN, so it works when the
+origin is down; see <a class="ld-ref ld-ref-here" href="#cat-no-maintenance" data-ld-target="cat-no-maintenance">Regression 2</a>.</li><li id="cat-static" data-ld-cat="future"><span class="ld-cat-badge" style="--cat:#BBBBBB;--cat-ink:#1c1c1a" title="Future work 2">F2</span>Compiled assets served from a bucket rather than the
+container, so a rolling deploy cannot 404 on a bundle from the other
+version.<span class="ld-cat-where"><a class="ld-ref ld-ref-forward" href="#flag-static-1" data-ld-target="flag-static-1"><span class="ld-arrow" aria-hidden="true">↓</span>settings_prod.py</a></span></li></ol>
+</div>
+  </header>
+  <section class="ld-chapter" id="ch-registry"><h2 class="ld-chapter-title">1. A registry that keeps its promises</h2><div class="ld-chapter-note"><p>Promotion by digest is only safe if tags cannot move, and only useful
+if the promoted image survives. Both are properties of the registry, so
+they come first.</p>
+</div></section><section class="ld-file" id="f0" data-ld-path="ecr.tf"><div class="ld-filenote"><p>The two registry properties the rest of the change depends on
+<a class="ld-cat-flag" id="flag-immutable-1" href="#cat-immutable" data-ld-target="cat-immutable" data-ld-cat="reliability" style="--cat:#117733;--cat-ink:#ffffff" title="Reliability 1: Before, a re-run could repoint a commit tag at different
+bytes. Commit tags are immutable; only latest moves."><span class="ld-cat-badge">R1</span></a> <a class="ld-cat-flag" id="flag-retention-1" href="#cat-retention" data-ld-target="cat-retention" data-ld-cat="reliability" style="--cat:#117733;--cat-ink:#ffffff" title="Reliability 2: Before, &amp;quot;keep last 5&amp;quot; expired the image production was
+running as soon as five more merges landed. Deployed images now age on
+their own rule."><span class="ld-cat-badge">R2</span></a>. The deploy's
+<a class="ld-ref ld-ref-forward" href="#resolve" data-ld-target="resolve"><span class="ld-arrow" aria-hidden="true">↓</span>resolve step</a> is what reads them.</p>
+</div><details class="ld-fileblock" open><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="infra">wren-terraform</span><code class="ld-path">ecr.tf</code><span class="ld-filetitle">immutable tags, split retention</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+22</span><span class="ld-stat ld-stat-del">−8</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f0-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-context" id="f0-r1"><td class="ld-no">1</td><td class="ld-no">1</td><td class="ld-text"><span class="ld-sign"> </span>resource &quot;aws_ecr_repository&quot; &quot;wren&quot; {</td></tr><tr class="ld-row ld-del" id="f0-r2"><td class="ld-no">2</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>  name                 = &quot;wren&quot;</td></tr><tr class="ld-row ld-del" id="f0-r3"><td class="ld-no">3</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>  image_tag_mutability = &quot;MUTABLE&quot;</td></tr><tr class="ld-row ld-add" id="f0-r4"><td class="ld-no"></td><td class="ld-no">2</td><td class="ld-text"><span class="ld-sign">+</span>  name = &quot;wren&quot;</td></tr><tr class="ld-row ld-add" id="f0-r5"><td class="ld-no"></td><td class="ld-no">3</td><td class="ld-text"><span class="ld-sign">+</span>  # SHA tags name a tested build and must not move; `latest` stays a pointer.</td></tr><tr class="ld-row ld-add ld-marked" id="f0-r6" data-ld-notes="f0n0"><td class="ld-no"></td><td class="ld-no">4</td><td class="ld-text"><span class="ld-sign">+</span>  image_tag_mutability = &quot;IMMUTABLE_WITH_EXCLUSION&quot;</td></tr><tr class="ld-row ld-add ld-marked" id="f0-r7" data-ld-notes="f0n0"><td class="ld-no"></td><td class="ld-no">5</td><td class="ld-text"><span class="ld-sign">+</span>  image_tag_mutability_exclusion_filter {</td></tr><tr class="ld-row ld-add ld-marked" id="f0-r8" data-ld-notes="f0n0"><td class="ld-no"></td><td class="ld-no">6</td><td class="ld-text"><span class="ld-sign">+</span>    filter      = &quot;latest&quot;</td></tr><tr class="ld-row ld-add ld-marked" id="f0-r9" data-ld-notes="f0n0"><td class="ld-no"></td><td class="ld-no">7</td><td class="ld-text"><span class="ld-sign">+</span>    filter_type = &quot;WILDCARD&quot;</td></tr><tr class="ld-row ld-add ld-marked" id="f0-r10" data-ld-notes="f0n0"><td class="ld-no"></td><td class="ld-no">8</td><td class="ld-text"><span class="ld-sign">+</span>  }</td></tr><tr class="ld-row ld-context" id="f0-r11"><td class="ld-no">4</td><td class="ld-no">9</td><td class="ld-text"><span class="ld-sign"> </span>}</td></tr><tr class="ld-row ld-context" id="f0-r12"><td class="ld-no">5</td><td class="ld-no">10</td><td class="ld-text"><span class="ld-sign"> </span>&nbsp;</td></tr><tr class="ld-sectionrow" id="retention-split"><td colspan="3"><div class="ld-section"><h3 class="ld-section-title">Deployed images and build candidates on separate rules</h3><div class="ld-section-note"><p>A single count cannot serve both: sized for candidate churn it
+expires images still in service, sized for deployments it keeps
+every candidate forever.</p>
+</div></div></td></tr><tr class="ld-row ld-add" id="f0-r13"><td class="ld-no"></td><td class="ld-no">11</td><td class="ld-text"><span class="ld-sign">+</span># Two populations age at different rates: deployed images and candidates.</td></tr><tr class="ld-row ld-context" id="f0-r14"><td class="ld-no">6</td><td class="ld-no">12</td><td class="ld-text"><span class="ld-sign"> </span>resource &quot;aws_ecr_lifecycle_policy&quot; &quot;wren&quot; {</td></tr><tr class="ld-row ld-context" id="f0-r15"><td class="ld-no">7</td><td class="ld-no">13</td><td class="ld-text"><span class="ld-sign"> </span>  repository = aws_ecr_repository.wren.name</td></tr><tr class="ld-row ld-context" id="f0-r16"><td class="ld-no">8</td><td class="ld-no">14</td><td class="ld-text"><span class="ld-sign"> </span>  policy = jsonencode({</td></tr><tr class="ld-row ld-del" id="f0-r17"><td class="ld-no">9</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>    rules = [{</td></tr><tr class="ld-row ld-del" id="f0-r18"><td class="ld-no">10</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>      rulePriority = 1</td></tr><tr class="ld-row ld-del ld-marked" id="f0-r19" data-ld-notes="f0n2"><td class="ld-no">11</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>      description  = &quot;keep last 5 images&quot;</td></tr><tr class="ld-row ld-del" id="f0-r20"><td class="ld-no">12</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>      selection    = { tagStatus = &quot;any&quot;, countType = &quot;imageCountMoreThan&quot;, countNumber = 5 }</td></tr><tr class="ld-row ld-del" id="f0-r21"><td class="ld-no">13</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>      action       = { type = &quot;expire&quot; }</td></tr><tr class="ld-row ld-del" id="f0-r22"><td class="ld-no">14</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>    }]</td></tr><tr class="ld-row ld-add" id="f0-r23"><td class="ld-no"></td><td class="ld-no">15</td><td class="ld-text"><span class="ld-sign">+</span>    rules = [</td></tr><tr class="ld-row ld-add" id="f0-r24"><td class="ld-no"></td><td class="ld-no">16</td><td class="ld-text"><span class="ld-sign">+</span>      {</td></tr><tr class="ld-row ld-add" id="f0-r25"><td class="ld-no"></td><td class="ld-no">17</td><td class="ld-text"><span class="ld-sign">+</span>        rulePriority = 1</td></tr><tr class="ld-row ld-add" id="f0-r26"><td class="ld-no"></td><td class="ld-no">18</td><td class="ld-text"><span class="ld-sign">+</span>        description  = &quot;Keep the last 20 deployed images, for rollback&quot;</td></tr><tr class="ld-row ld-add ld-marked" id="f0-r27" data-ld-notes="f0n1"><td class="ld-no"></td><td class="ld-no">19</td><td class="ld-text"><span class="ld-sign">+</span>        selection    = { tagStatus = &quot;tagged&quot;, tagPrefixList = [&quot;deployed-&quot;], countType = &quot;imageCountMoreThan&quot;, countNumber = 20 }</td></tr><tr class="ld-row ld-add" id="f0-r28"><td class="ld-no"></td><td class="ld-no">20</td><td class="ld-text"><span class="ld-sign">+</span>        action       = { type = &quot;expire&quot; }</td></tr><tr class="ld-row ld-add" id="f0-r29"><td class="ld-no"></td><td class="ld-no">21</td><td class="ld-text"><span class="ld-sign">+</span>      },</td></tr><tr class="ld-row ld-add" id="f0-r30"><td class="ld-no"></td><td class="ld-no">22</td><td class="ld-text"><span class="ld-sign">+</span>      {</td></tr><tr class="ld-row ld-add" id="f0-r31"><td class="ld-no"></td><td class="ld-no">23</td><td class="ld-text"><span class="ld-sign">+</span>        rulePriority = 2</td></tr><tr class="ld-row ld-add" id="f0-r32"><td class="ld-no"></td><td class="ld-no">24</td><td class="ld-text"><span class="ld-sign">+</span>        description  = &quot;Keep the last 20 build candidates&quot;</td></tr><tr class="ld-row ld-add" id="f0-r33"><td class="ld-no"></td><td class="ld-no">25</td><td class="ld-text"><span class="ld-sign">+</span>        selection    = { tagStatus = &quot;any&quot;, countType = &quot;imageCountMoreThan&quot;, countNumber = 20 }</td></tr><tr class="ld-row ld-add" id="f0-r34"><td class="ld-no"></td><td class="ld-no">26</td><td class="ld-text"><span class="ld-sign">+</span>        action       = { type = &quot;expire&quot; }</td></tr><tr class="ld-row ld-add" id="f0-r35"><td class="ld-no"></td><td class="ld-no">27</td><td class="ld-text"><span class="ld-sign">+</span>      },</td></tr><tr class="ld-row ld-add" id="f0-r36"><td class="ld-no"></td><td class="ld-no">28</td><td class="ld-text"><span class="ld-sign">+</span>    ]</td></tr><tr class="ld-row ld-context" id="f0-r37"><td class="ld-no">15</td><td class="ld-no">29</td><td class="ld-text"><span class="ld-sign"> </span>  })</td></tr><tr class="ld-row ld-context" id="f0-r38"><td class="ld-no">16</td><td class="ld-no">30</td><td class="ld-text"><span class="ld-sign"> </span>}</td></tr></tbody></table></div><div class="ld-gutter"><aside class="ld-note" id="f0n0" data-ld-row="f0-r6"><p>Commit tags cannot be repointed; <code>latest</code> can, because the task
+definition Terraform writes still names it.</p>
+</aside><aside class="ld-note" id="f0n1" data-ld-row="f0-r27"><p>The <code>deployed-</code> prefix a deploy writes. An image claimed by a lower
+rule number is exempt from every later rule.</p>
+</aside><aside class="ld-note" id="f0n2" data-ld-row="f0-r19"><p>What was there before: five images, any tag, which is about two
+deploys of history.</p>
+</aside></div></div></details></section><section class="ld-file" id="f1" data-ld-path="iam.tf"><div class="ld-filenote"><p>One trust-policy condition <a class="ld-cat-flag" id="flag-oidc-1" href="#cat-oidc" data-ld-target="cat-oidc" data-ld-cat="security" style="--cat:#332288;--cat-ink:#ffffff" title="Security 1: Before, the deploy trusted repo:example/wren:*, so any branch
+could assume the deploy role. It now trusts the prod environment only."><span class="ld-cat-badge">S1</span></a>. The old wildcard is
+<span class="ld-quote"><button type="button" class="ld-quote-btn" aria-expanded="false" data-ld-target="old-subject">quoted here</button><span class="ld-quote-body" hidden><span class="ld-qhead"><code><span class="ld-src">wren-terraform</span> iam.tf</code><a class="ld-qjump" href="#old-subject" data-ld-target="old-subject">go to context ↦</a></span><span class="ld-qrow ld-del"><span class="ld-qno">9</span><span class="ld-qsign">-</span><span class="ld-qtext">        StringLike = { &quot;token.actions.githubusercontent.com:sub&quot; = &quot;repo:example/wren:*&quot; }</span></span></span></span> so the reader need not scroll.</p>
+</div><details class="ld-fileblock" open><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="infra">wren-terraform</span><code class="ld-path">iam.tf</code><span class="ld-filetitle">who may deploy</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+2</span><span class="ld-stat ld-stat-del">−1</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f1-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">resource &quot;aws_iam_role&quot; &quot;deploy&quot; {</td></tr><tr class="ld-row ld-context" id="f1-r1"><td class="ld-no">6</td><td class="ld-no">6</td><td class="ld-text"><span class="ld-sign"> </span>      Principal = { Federated = var.github_oidc_provider_arn }</td></tr><tr class="ld-row ld-context" id="f1-r2"><td class="ld-no">7</td><td class="ld-no">7</td><td class="ld-text"><span class="ld-sign"> </span>      Action    = &quot;sts:AssumeRoleWithWebIdentity&quot;</td></tr><tr class="ld-row ld-context" id="f1-r3"><td class="ld-no">8</td><td class="ld-no">8</td><td class="ld-text"><span class="ld-sign"> </span>      Condition = {</td></tr><tr class="ld-row ld-del" id="f1-r4"><td class="ld-no">9</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>        StringLike = { &quot;token.actions.githubusercontent.com:sub&quot; = &quot;repo:example/wren:*&quot; }</td></tr><tr class="ld-row ld-add" id="f1-r5"><td class="ld-no"></td><td class="ld-no">9</td><td class="ld-text"><span class="ld-sign">+</span>        # The prod environment only. `repo:example/wren:*` let any branch in.</td></tr><tr class="ld-row ld-add ld-marked" id="f1-r6" data-ld-notes="f1n0"><td class="ld-no"></td><td class="ld-no">10</td><td class="ld-text"><span class="ld-sign">+</span>        StringEquals = { &quot;token.actions.githubusercontent.com:sub&quot; = &quot;repo:example/wren:environment:prod&quot; }</td></tr><tr class="ld-row ld-context" id="f1-r7"><td class="ld-no">10</td><td class="ld-no">11</td><td class="ld-text"><span class="ld-sign"> </span>      }</td></tr><tr class="ld-row ld-context" id="f1-r8"><td class="ld-no">11</td><td class="ld-no">12</td><td class="ld-text"><span class="ld-sign"> </span>    }]</td></tr><tr class="ld-row ld-context" id="f1-r9"><td class="ld-no">12</td><td class="ld-no">13</td><td class="ld-text"><span class="ld-sign"> </span>  })</td></tr></tbody></table></div><div class="ld-gutter"><aside class="ld-note" id="f1n0" data-ld-row="f1-r6"><p>A job that names a GitHub environment presents <code>environment:&lt;name&gt;</code>
+as its subject, so the environment's branch policy decides who
+reaches this role.</p>
+</aside></div></div></details></section><section class="ld-chapter" id="ch-image"><h2 class="ld-chapter-title">2. One image for every tier</h2><div class="ld-chapter-note"><p>The Dockerfile and the settings selector. Nothing in the workflow can
+promote an artifact until there is one artifact.</p>
+</div></section><section class="ld-file" id="f2" data-ld-path="Dockerfile"><div class="ld-filenote"><p><code>test</code> is built from <code>prod</code>, so the suite runs against the layers that
+ship <a class="ld-cat-flag" id="flag-same-bytes-1" href="#cat-same-bytes" data-ld-target="cat-same-bytes" data-ld-cat="correctness" style="--cat:#CC6677;--cat-ink:#ffffff" title="Correctness 1: Before, the deploy rebuilt the image, so the bytes tested
+and the bytes shipped were two builds of the same source. The deploy
+now promotes the image CI tested, by digest."><span class="ld-cat-badge">C1</span></a>. Settings are chosen at runtime
+<a class="ld-cat-flag" id="flag-runtime-settings-1" href="#cat-runtime-settings" data-ld-target="cat-runtime-settings" data-ld-cat="correctness" style="--cat:#CC6677;--cat-ink:#ffffff" title="Correctness 2: Before, the production settings module was copied
+over settings.py at build time, so one image could only ever be
+production. The module is named at runtime, and one image boots as any
+tier."><span class="ld-cat-badge">C2</span></a>, which is what lets one image be both the
+test target and the production artifact.</p>
+</div><details class="ld-fileblock" open><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">Dockerfile</code><span class="ld-filetitle">four stages, one build graph</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+15</span><span class="ld-stat ld-stat-del">−3</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f2-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-del" id="f2-r1"><td class="ld-no">1</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>FROM python:3.12-slim</td></tr><tr class="ld-row ld-add" id="f2-r2"><td class="ld-no"></td><td class="ld-no">1</td><td class="ld-text"><span class="ld-sign">+</span># base: dependencies only. Shared by every stage below.</td></tr><tr class="ld-row ld-add" id="f2-r3"><td class="ld-no"></td><td class="ld-no">2</td><td class="ld-text"><span class="ld-sign">+</span>FROM python:3.12-slim AS base</td></tr><tr class="ld-row ld-context" id="f2-r4"><td class="ld-no">2</td><td class="ld-no">3</td><td class="ld-text"><span class="ld-sign"> </span>WORKDIR /app</td></tr><tr class="ld-row ld-context" id="f2-r5"><td class="ld-no">3</td><td class="ld-no">4</td><td class="ld-text"><span class="ld-sign"> </span>COPY requirements.txt .</td></tr><tr class="ld-row ld-del" id="f2-r6"><td class="ld-no">4</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>RUN pip install -r requirements.txt</td></tr><tr class="ld-row ld-add" id="f2-r7"><td class="ld-no"></td><td class="ld-no">5</td><td class="ld-text"><span class="ld-sign">+</span>RUN pip install --no-cache-dir -r requirements.txt</td></tr><tr class="ld-row ld-add" id="f2-r8"><td class="ld-no"></td><td class="ld-no">6</td><td class="ld-text"><span class="ld-sign">+</span>&nbsp;</td></tr><tr class="ld-row ld-add" id="f2-r9"><td class="ld-no"></td><td class="ld-no">7</td><td class="ld-text"><span class="ld-sign">+</span># prod: the artifact that ships. Settings are chosen at runtime.</td></tr><tr class="ld-sectionrow" id="stage-prod"><td colspan="3"><div class="ld-section"><h3 class="ld-section-title">prod: the artifact that ships</h3></div></td></tr><tr class="ld-row ld-add" id="f2-r10"><td class="ld-no"></td><td class="ld-no">8</td><td class="ld-text"><span class="ld-sign">+</span>FROM base AS prod</td></tr><tr class="ld-row ld-context" id="f2-r11"><td class="ld-no">5</td><td class="ld-no">9</td><td class="ld-text"><span class="ld-sign"> </span>COPY app/ ./app</td></tr><tr class="ld-row ld-del ld-marked" id="f2-r12" data-ld-notes="bake-settings"><td class="ld-no">6</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>RUN cp app/settings_prod.py app/settings.py</td></tr><tr class="ld-row ld-add ld-marked" id="f2-r13" data-ld-notes="f2n1"><td class="ld-no"></td><td class="ld-no">10</td><td class="ld-text"><span class="ld-sign">+</span>ENV WREN_SETTINGS_MODULE=settings_prod</td></tr><tr class="ld-row ld-context" id="f2-r14"><td class="ld-no">7</td><td class="ld-no">11</td><td class="ld-text"><span class="ld-sign"> </span>CMD [&quot;gunicorn&quot;, &quot;app.wsgi&quot;]</td></tr><tr class="ld-row ld-add" id="f2-r15"><td class="ld-no"></td><td class="ld-no">12</td><td class="ld-text"><span class="ld-sign">+</span>&nbsp;</td></tr><tr class="ld-row ld-add" id="f2-r16"><td class="ld-no"></td><td class="ld-no">13</td><td class="ld-text"><span class="ld-sign">+</span># test: prod plus the test toolchain, so CI tests the bytes that ship.</td></tr><tr class="ld-sectionrow" id="stage-test"><td colspan="3"><div class="ld-section"><h3 class="ld-section-title">test: what CI runs the suite against</h3><div class="ld-section-note"><p>Everything below <code>prod</code> is test toolchain. The bytes above it are
+exactly what production runs.</p>
+</div></div></td></tr><tr class="ld-row ld-add" id="f2-r17"><td class="ld-no"></td><td class="ld-no">14</td><td class="ld-text"><span class="ld-sign">+</span>FROM prod AS test</td></tr><tr class="ld-row ld-add" id="f2-r18"><td class="ld-no"></td><td class="ld-no">15</td><td class="ld-text"><span class="ld-sign">+</span>RUN pip install --no-cache-dir pytest</td></tr><tr class="ld-row ld-add" id="f2-r19"><td class="ld-no"></td><td class="ld-no">16</td><td class="ld-text"><span class="ld-sign">+</span>&nbsp;</td></tr><tr class="ld-row ld-add" id="f2-r20"><td class="ld-no"></td><td class="ld-no">17</td><td class="ld-text"><span class="ld-sign">+</span># dev: base plus the toolchain, with the working tree mounted over it.</td></tr><tr class="ld-sectionrow" id="f2s2"><td colspan="3"><div class="ld-section"><h3 class="ld-section-title">dev: built locally, working tree mounted over it</h3><div class="ld-section-note"><p>Built on a laptop rather than pulled <a class="ld-cat-flag" id="flag-first-build-1" href="#cat-first-build" data-ld-target="cat-first-build" data-ld-cat="regression" style="--cat:#555555;--cat-ink:#ffffff" title="Regression 1: The dev image is no longer pulled, so a first checkout
+builds it, and a dependency change rebuilds it."><span class="ld-cat-badge">X1</span></a>.</p>
+</div></div></td></tr><tr class="ld-row ld-add" id="f2-r21"><td class="ld-no"></td><td class="ld-no">18</td><td class="ld-text"><span class="ld-sign">+</span>FROM base AS dev</td></tr><tr class="ld-row ld-add" id="f2-r22"><td class="ld-no"></td><td class="ld-no">19</td><td class="ld-text"><span class="ld-sign">+</span>RUN pip install --no-cache-dir pytest</td></tr></tbody></table></div><div class="ld-gutter"><aside class="ld-note" id="bake-settings" data-ld-row="f2-r12"><p>The line that made the old image production-only. Anchors match
+row text without the leading <code>+</code> or <code>-</code>.</p>
+</aside><aside class="ld-note" id="f2n1" data-ld-row="f2-r13"><p>The default, overridable by CI for the same image; see
+<a class="ld-ref ld-ref-forward" href="#file-app-app-__init__.py" data-ld-target="file-app-app-__init__.py"><span class="ld-arrow" aria-hidden="true">↓</span>the selector</a>.</p>
+</aside></div></div></details></section><section class="ld-file" id="f3" data-ld-path="app/__init__.py"><div class="ld-filenote"><p>Reads the module name from the environment <a class="ld-cat-flag" id="flag-runtime-settings-2" href="#cat-runtime-settings" data-ld-target="cat-runtime-settings" data-ld-cat="correctness" style="--cat:#CC6677;--cat-ink:#ffffff" title="Correctness 2: Before, the production settings module was copied
+over settings.py at build time, so one image could only ever be
+production. The module is named at runtime, and one image boots as any
+tier."><span class="ld-cat-badge">C2</span></a>.
+Replaces the <span class="ld-quote"><button type="button" class="ld-quote-btn" aria-expanded="false" data-ld-target="bake-settings">copy at build time</button><span class="ld-quote-body" hidden><span class="ld-qhead"><code><span class="ld-src">wren</span> Dockerfile</code><a class="ld-qjump" href="#bake-settings" data-ld-target="bake-settings">go to context ↦</a></span><span class="ld-qrow ld-del"><span class="ld-qno">6</span><span class="ld-qsign">-</span><span class="ld-qtext">RUN cp app/settings_prod.py app/settings.py</span></span></span></span>.</p>
+</div><details class="ld-fileblock" open><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">app/__init__.py</code><span class="ld-badge ld-badge-add">added</span><span class="ld-filetitle">the settings selector</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+6</span><span class="ld-stat ld-stat-del">−0</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f3-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-add" id="f3-r1"><td class="ld-no"></td><td class="ld-no">1</td><td class="ld-text"><span class="ld-sign">+</span>import importlib</td></tr><tr class="ld-row ld-add" id="f3-r2"><td class="ld-no"></td><td class="ld-no">2</td><td class="ld-text"><span class="ld-sign">+</span>import os</td></tr><tr class="ld-row ld-add" id="f3-r3"><td class="ld-no"></td><td class="ld-no">3</td><td class="ld-text"><span class="ld-sign">+</span>&nbsp;</td></tr><tr class="ld-row ld-add" id="f3-r4"><td class="ld-no"></td><td class="ld-no">4</td><td class="ld-text"><span class="ld-sign">+</span># One image boots as any tier: the settings module is named at runtime.</td></tr><tr class="ld-row ld-add ld-marked" id="f3-r5" data-ld-notes="f3n0"><td class="ld-no"></td><td class="ld-no">5</td><td class="ld-text"><span class="ld-sign">+</span>_module = os.environ.get(&quot;WREN_SETTINGS_MODULE&quot;, &quot;settings_dev&quot;)</td></tr><tr class="ld-row ld-add" id="f3-r6"><td class="ld-no"></td><td class="ld-no">6</td><td class="ld-text"><span class="ld-sign">+</span>settings = importlib.import_module(f&quot;app.{_module}&quot;)</td></tr></tbody></table></div><div class="ld-gutter"><aside class="ld-note" id="f3n0" data-ld-row="f3-r5"><p>A regex anchor. The fallback for a developer's checkout, where the
+variable is unset.</p>
+</aside></div></div></details></section><section class="ld-file" id="f4" data-ld-path="app/settings.py"><div class="ld-filenote"><p>The file the old Dockerfile overwrote. Nothing reads it now.</p>
+</div><details class="ld-fileblock" open><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">app/settings.py</code><span class="ld-badge ld-badge-del">deleted</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+0</span><span class="ld-stat ld-stat-del">−3</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f4-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-del" id="f4-r1"><td class="ld-no">1</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span># Copied over at build time by the Dockerfile.</td></tr><tr class="ld-row ld-del" id="f4-r2"><td class="ld-no">2</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>from .settings_base import *  # noqa</td></tr><tr class="ld-row ld-del" id="f4-r3"><td class="ld-no">3</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>DEBUG = True</td></tr></tbody></table></div><div class="ld-gutter"></div></div></details></section><section class="ld-file" id="f5" data-ld-path="app/settings_prod.py"><div class="ld-filenote"><p>Static files move to a bucket <a class="ld-cat-flag" id="flag-static-1" href="#cat-static" data-ld-target="cat-static" data-ld-cat="future" style="--cat:#BBBBBB;--cat-ink:#1c1c1a" title="Future work 2: Compiled assets served from a bucket rather than the
+container, so a rolling deploy cannot 404 on a bundle from the other
+version."><span class="ld-cat-badge">F2</span></a>; only <code>STATIC_URL</code>
+changes here.</p>
+</div><details class="ld-fileblock" open><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">app/settings_prod.py</code><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+1</span><span class="ld-stat ld-stat-del">−0</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f5-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-context" id="f5-r1"><td class="ld-no">1</td><td class="ld-no">1</td><td class="ld-text"><span class="ld-sign"> </span>from .settings_base import *  # noqa</td></tr><tr class="ld-row ld-context" id="f5-r2"><td class="ld-no">2</td><td class="ld-no">2</td><td class="ld-text"><span class="ld-sign"> </span>DEBUG = False</td></tr><tr class="ld-row ld-context" id="f5-r3"><td class="ld-no">3</td><td class="ld-no">3</td><td class="ld-text"><span class="ld-sign"> </span>ALLOWED_HOSTS = [&quot;wren.example.org&quot;]</td></tr><tr class="ld-row ld-add ld-marked" id="f5-r4" data-ld-notes="f5n0"><td class="ld-no"></td><td class="ld-no">4</td><td class="ld-text"><span class="ld-sign">+</span>STATIC_URL = &quot;https://static.wren.example.org/static/&quot;</td></tr></tbody></table></div><div class="ld-gutter"><aside class="ld-note" id="f5n0" data-ld-row="f5-r4"><p>Anchored by new-side line number: line 4 of the new file.</p>
+</aside></div></div></details></section><section class="ld-chapter" id="ch-deploy"><h2 class="ld-chapter-title">3. The deploy stops building</h2><div class="ld-chapter-note"><p>With the two chapters above in place, the workflow can resolve a tag to
+a digest and ship it. This is the only file where the change is visible
+as a change in what the service does.</p>
+</div></section><section class="ld-file" id="f6" data-ld-path=".github/workflows/deploy.yml"><div class="ld-filenote"><p>The payoff. The build step is gone; the deploy resolves the commit's
+tag to a digest <a class="ld-cat-flag" id="flag-same-bytes-2" href="#cat-same-bytes" data-ld-target="cat-same-bytes" data-ld-cat="correctness" style="--cat:#CC6677;--cat-ink:#ffffff" title="Correctness 1: Before, the deploy rebuilt the image, so the bytes tested
+and the bytes shipped were two builds of the same source. The deploy
+now promotes the image CI tested, by digest."><span class="ld-cat-badge">C1</span></a> and ships that. Authenticated by
+OIDC <a class="ld-cat-flag" id="flag-no-keys-1" href="#cat-no-keys" data-ld-target="cat-no-keys" data-ld-cat="security" style="--cat:#332288;--cat-ink:#ffffff" title="Security 2: Before, the workflow carried long-lived access keys as
+repository secrets. It now assumes a role over OIDC."><span class="ld-cat-badge">S2</span></a>, on a pinned action <a class="ld-cat-flag" id="flag-sha-pins-1" href="#cat-sha-pins" data-ld-target="cat-sha-pins" data-ld-cat="security" style="--cat:#332288;--cat-ink:#ffffff" title="Security 3: Before, actions were referenced by tag. They are pinned to a
+commit SHA."><span class="ld-cat-badge">S3</span></a>.</p>
+</div><details class="ld-fileblock" open><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">.github/workflows/deploy.yml</code><span class="ld-filetitle">promote, do not rebuild</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+18</span><span class="ld-stat ld-stat-del">−9</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f6-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">name: Deploy</td></tr><tr class="ld-row ld-context" id="f6-r1"><td class="ld-no">2</td><td class="ld-no">2</td><td class="ld-text"><span class="ld-sign"> </span>on:</td></tr><tr class="ld-row ld-context" id="f6-r2"><td class="ld-no">3</td><td class="ld-no">3</td><td class="ld-text"><span class="ld-sign"> </span>  push:</td></tr><tr class="ld-row ld-context" id="f6-r3"><td class="ld-no">4</td><td class="ld-no">4</td><td class="ld-text"><span class="ld-sign"> </span>    branches: [prod]</td></tr><tr class="ld-row ld-add" id="f6-r4"><td class="ld-no"></td><td class="ld-no">5</td><td class="ld-text"><span class="ld-sign">+</span>permissions:</td></tr><tr class="ld-row ld-add" id="f6-r5"><td class="ld-no"></td><td class="ld-no">6</td><td class="ld-text"><span class="ld-sign">+</span>  id-token: write</td></tr><tr class="ld-row ld-add" id="f6-r6"><td class="ld-no"></td><td class="ld-no">7</td><td class="ld-text"><span class="ld-sign">+</span>  contents: read</td></tr><tr class="ld-row ld-context" id="f6-r7"><td class="ld-no">5</td><td class="ld-no">8</td><td class="ld-text"><span class="ld-sign"> </span>jobs:</td></tr><tr class="ld-row ld-context" id="f6-r8"><td class="ld-no">6</td><td class="ld-no">9</td><td class="ld-text"><span class="ld-sign"> </span>  deploy:</td></tr><tr class="ld-row ld-context" id="f6-r9"><td class="ld-no">7</td><td class="ld-no">10</td><td class="ld-text"><span class="ld-sign"> </span>    runs-on: ubuntu-latest</td></tr><tr class="ld-row ld-del" id="f6-r10"><td class="ld-no">8</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>    env:</td></tr><tr class="ld-row ld-del ld-marked" id="f6-r11" data-ld-notes="f6n0"><td class="ld-no">9</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}</td></tr><tr class="ld-row ld-del ld-marked" id="f6-r12" data-ld-notes="f6n0"><td class="ld-no">10</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}</td></tr><tr class="ld-row ld-add ld-marked" id="f6-r13" data-ld-notes="f6n1"><td class="ld-no"></td><td class="ld-no">11</td><td class="ld-text"><span class="ld-sign">+</span>    environment: prod</td></tr><tr class="ld-row ld-context" id="f6-r14"><td class="ld-no">11</td><td class="ld-no">12</td><td class="ld-text"><span class="ld-sign"> </span>    steps:</td></tr><tr class="ld-row ld-del" id="f6-r15"><td class="ld-no">12</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>      - uses: actions/checkout@v4</td></tr><tr class="ld-row ld-del" id="f6-r16"><td class="ld-no">13</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>      - name: Build and push</td></tr><tr class="ld-row ld-add ld-marked" id="f6-r17" data-ld-notes="f6n2"><td class="ld-no"></td><td class="ld-no">13</td><td class="ld-text"><span class="ld-sign">+</span>      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2</td></tr><tr class="ld-row ld-add" id="f6-r18"><td class="ld-no"></td><td class="ld-no">14</td><td class="ld-text"><span class="ld-sign">+</span>      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2</td></tr><tr class="ld-row ld-add" id="f6-r19"><td class="ld-no"></td><td class="ld-no">15</td><td class="ld-text"><span class="ld-sign">+</span>        with:</td></tr><tr class="ld-row ld-add" id="f6-r20"><td class="ld-no"></td><td class="ld-no">16</td><td class="ld-text"><span class="ld-sign">+</span>          role-to-assume: ${{ vars.DEPLOY_ROLE }}</td></tr><tr class="ld-row ld-add" id="f6-r21"><td class="ld-no"></td><td class="ld-no">17</td><td class="ld-text"><span class="ld-sign">+</span>          aws-region: us-east-1</td></tr><tr class="ld-sectionrow" id="resolve"><td colspan="3"><div class="ld-section"><h3 class="ld-section-title">Resolve the tested image</h3><div class="ld-section-note"><p>Digests, not tags, wherever the choice exists. This only works
+because <a class="ld-ref ld-ref-back" href="#retention-split" data-ld-target="retention-split"><span class="ld-arrow" aria-hidden="true">↑</span>the registry</a> keeps the image and
+refuses to move the tag.</p>
+</div></div></td></tr><tr class="ld-row ld-add" id="f6-r22"><td class="ld-no"></td><td class="ld-no">18</td><td class="ld-text"><span class="ld-sign">+</span>      # Promote, do not rebuild: resolve the commit&#x27;s tag to a digest.</td></tr><tr class="ld-row ld-add" id="f6-r23"><td class="ld-no"></td><td class="ld-no">19</td><td class="ld-text"><span class="ld-sign">+</span>      - name: Resolve the tested image</td></tr><tr class="ld-row ld-add" id="f6-r24"><td class="ld-no"></td><td class="ld-no">20</td><td class="ld-text"><span class="ld-sign">+</span>        id: resolve</td></tr><tr class="ld-row ld-context" id="f6-r25"><td class="ld-no">14</td><td class="ld-no">21</td><td class="ld-text"><span class="ld-sign"> </span>        run: |</td></tr><tr class="ld-row ld-del ld-marked" id="f6-r26" data-ld-notes="f6n3"><td class="ld-no">15</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>          docker build -t $REGISTRY/wren:latest .</td></tr><tr class="ld-row ld-del ld-marked" id="f6-r27" data-ld-notes="f6n3"><td class="ld-no">16</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>          docker push $REGISTRY/wren:latest</td></tr><tr class="ld-row ld-del" id="f6-r28"><td class="ld-no">17</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>      - name: Deploy</td></tr><tr class="ld-row ld-del" id="f6-r29"><td class="ld-no">18</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>        run: aws ecs update-service --cluster wren --service wren --force-new-deployment</td></tr><tr class="ld-row ld-add" id="f6-r30"><td class="ld-no"></td><td class="ld-no">22</td><td class="ld-text"><span class="ld-sign">+</span>          digest=$(aws ecr describe-images --repository-name wren \</td></tr><tr class="ld-row ld-add" id="f6-r31"><td class="ld-no"></td><td class="ld-no">23</td><td class="ld-text"><span class="ld-sign">+</span>            --image-ids imageTag=${{ github.sha }} \</td></tr><tr class="ld-row ld-add" id="f6-r32"><td class="ld-no"></td><td class="ld-no">24</td><td class="ld-text"><span class="ld-sign">+</span>            --query &#x27;imageDetails[0].imageDigest&#x27; --output text)</td></tr><tr class="ld-row ld-add" id="f6-r33"><td class="ld-no"></td><td class="ld-no">25</td><td class="ld-text"><span class="ld-sign">+</span>          echo &quot;digest=$digest&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;</td></tr><tr class="ld-row ld-add" id="f6-r34"><td class="ld-no"></td><td class="ld-no">26</td><td class="ld-text"><span class="ld-sign">+</span>      - name: Deploy the digest-pinned task definition</td></tr><tr class="ld-row ld-add" id="f6-r35"><td class="ld-no"></td><td class="ld-no">27</td><td class="ld-text"><span class="ld-sign">+</span>        run: ./scripts/deploy.sh &quot;wren@${{ steps.resolve.outputs.digest }}&quot;</td></tr></tbody></table></div><div class="ld-gutter"><aside class="ld-note" id="f6n0" data-ld-row="f6-r11"><p>Long-lived keys, removed <a class="ld-cat-flag" id="flag-no-keys-2" href="#cat-no-keys" data-ld-target="cat-no-keys" data-ld-cat="security" style="--cat:#332288;--cat-ink:#ffffff" title="Security 2: Before, the workflow carried long-lived access keys as
+repository secrets. It now assumes a role over OIDC."><span class="ld-cat-badge">S2</span></a>.</p>
+</aside><aside class="ld-note" id="f6n1" data-ld-row="f6-r13"><p>Naming the environment is what changes the OIDC subject the
+<a class="ld-ref ld-ref-back" href="#file-infra-iam.tf" data-ld-target="file-infra-iam.tf"><span class="ld-arrow" aria-hidden="true">↑</span>trust policy</a> matches <a class="ld-cat-flag" id="flag-oidc-2" href="#cat-oidc" data-ld-target="cat-oidc" data-ld-cat="security" style="--cat:#332288;--cat-ink:#ffffff" title="Security 1: Before, the deploy trusted repo:example/wren:*, so any branch
+could assume the deploy role. It now trusts the prod environment only."><span class="ld-cat-badge">S1</span></a>.</p>
+</aside><aside class="ld-note" id="f6n2" data-ld-row="f6-r17"><p>Pinned to a commit, with the version in a comment for humans
+<a class="ld-cat-flag" id="flag-sha-pins-2" href="#cat-sha-pins" data-ld-target="cat-sha-pins" data-ld-cat="security" style="--cat:#332288;--cat-ink:#ffffff" title="Security 3: Before, actions were referenced by tag. They are pinned to a
+commit SHA."><span class="ld-cat-badge">S3</span></a>. <code>nth: 2</code> picks the added row over the removed
+one above it, which matches the same text.</p>
+</aside><aside class="ld-note" id="f6n3" data-ld-row="f6-r26"><p>The build at deploy time, gone. <code>through:</code> extends this note to the
+next matching row.</p>
+</aside></div></div></details></section><section class="ld-file" id="f7" data-ld-path="ingress.tf"><div class="ld-filenote"><p>Renamed from <code>alb.tf</code>; the badge says so. Timing changes only
+<a class="ld-cat-flag" id="flag-health-1" href="#cat-health" data-ld-target="cat-health" data-ld-cat="reliability" style="--cat:#117733;--cat-ink:#ffffff" title="Reliability 3: Before, health checks ran once a minute and old tasks drained
+for five minutes. Checks run every 15 seconds and the drain is 120,
+since the CDN gives up on an origin at about 100."><span class="ld-cat-badge">R3</span></a>.</p>
+</div><details class="ld-fileblock" open><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="infra">wren-terraform</span><code class="ld-path">ingress.tf</code><span class="ld-badge ld-badge-ren">renamed</span><span class="ld-rename">from <code>alb.tf</code></span><span class="ld-filetitle">faster checks, shorter drain</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+4</span><span class="ld-stat ld-stat-del">−2</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f7-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">resource &quot;aws_lb_target_group&quot; &quot;wren&quot; {</td></tr><tr class="ld-row ld-context" id="f7-r1"><td class="ld-no">11</td><td class="ld-no">11</td><td class="ld-text"><span class="ld-sign"> </span>  vpc_id   = var.vpc_id</td></tr><tr class="ld-row ld-context" id="f7-r2"><td class="ld-no">12</td><td class="ld-no">12</td><td class="ld-text"><span class="ld-sign"> </span>  health_check {</td></tr><tr class="ld-row ld-context" id="f7-r3"><td class="ld-no">13</td><td class="ld-no">13</td><td class="ld-text"><span class="ld-sign"> </span>    path     = &quot;/healthcheck/&quot;</td></tr><tr class="ld-row ld-del" id="f7-r4"><td class="ld-no">14</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>    interval = 60</td></tr><tr class="ld-row ld-del" id="f7-r5"><td class="ld-no">15</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>    timeout  = 30</td></tr><tr class="ld-row ld-add ld-marked" id="f7-r6" data-ld-notes="f7n0"><td class="ld-no"></td><td class="ld-no">14</td><td class="ld-text"><span class="ld-sign">+</span>    interval = 15</td></tr><tr class="ld-row ld-add ld-marked" id="f7-r7" data-ld-notes="f7n0"><td class="ld-no"></td><td class="ld-no">15</td><td class="ld-text"><span class="ld-sign">+</span>    timeout  = 5</td></tr><tr class="ld-row ld-context" id="f7-r8"><td class="ld-no">16</td><td class="ld-no">16</td><td class="ld-text"><span class="ld-sign"> </span>  }</td></tr><tr class="ld-row ld-add" id="f7-r9"><td class="ld-no"></td><td class="ld-no">17</td><td class="ld-text"><span class="ld-sign">+</span>  # Cloudflare gives up on an origin at about 100 seconds.</td></tr><tr class="ld-row ld-add ld-marked" id="f7-r10" data-ld-notes="f7n1"><td class="ld-no"></td><td class="ld-no">18</td><td class="ld-text"><span class="ld-sign">+</span>  deregistration_delay = 120</td></tr><tr class="ld-row ld-context" id="f7-r11"><td class="ld-no">17</td><td class="ld-no">19</td><td class="ld-text"><span class="ld-sign"> </span>}</td></tr></tbody></table></div><div class="ld-gutter"><aside class="ld-note" id="f7n0" data-ld-row="f7-r6"><p>Healthy threshold times interval is the floor on time-to-healthy.</p>
+</aside><aside class="ld-note" id="f7n1" data-ld-row="f7-r10"><p>Cloudflare answers 524 at about 100 seconds, so a longer drain
+waits for clients that have already gone.</p>
+</aside></div></div></details></section><section class="ld-file" id="f8" data-ld-path="maintenance.tf"><div class="ld-filenote"><p>Two always-on resources serving nothing, gone <a class="ld-cat-flag" id="flag-no-maintenance-1" href="#cat-no-maintenance" data-ld-target="cat-no-maintenance" data-ld-cat="regression" style="--cat:#555555;--cat-ink:#ffffff" title="Regression 2: The maintenance page went with the second target
+group. There is no maintenance mode until an edge-served one exists."><span class="ld-cat-badge">X2</span></a>.
+The edge-served replacement is <a class="ld-ref ld-ref-back" href="#cat-edge-maint" data-ld-target="cat-edge-maint"><span class="ld-arrow" aria-hidden="true">↑</span>future work</a>.</p>
+</div><details class="ld-fileblock" open><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="infra">wren-terraform</span><code class="ld-path">maintenance.tf</code><span class="ld-badge ld-badge-del">deleted</span><span class="ld-filetitle">the maintenance page, removed</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+0</span><span class="ld-stat ld-stat-del">−14</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f8-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-del" id="f8-r1"><td class="ld-no">1</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span># A second target group and an always-on task serving a maintenance page.</td></tr><tr class="ld-row ld-del" id="f8-r2"><td class="ld-no">2</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>resource &quot;aws_lb_target_group&quot; &quot;maintenance&quot; {</td></tr><tr class="ld-row ld-del" id="f8-r3"><td class="ld-no">3</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>  name     = &quot;wren-maintenance&quot;</td></tr><tr class="ld-row ld-del" id="f8-r4"><td class="ld-no">4</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>  port     = 8080</td></tr><tr class="ld-row ld-del" id="f8-r5"><td class="ld-no">5</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>  protocol = &quot;HTTP&quot;</td></tr><tr class="ld-row ld-del" id="f8-r6"><td class="ld-no">6</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>  vpc_id   = var.vpc_id</td></tr><tr class="ld-row ld-del" id="f8-r7"><td class="ld-no">7</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>}</td></tr><tr class="ld-row ld-del" id="f8-r8"><td class="ld-no">8</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>&nbsp;</td></tr><tr class="ld-row ld-del" id="f8-r9"><td class="ld-no">9</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>resource &quot;aws_ecs_service&quot; &quot;maintenance&quot; {</td></tr><tr class="ld-row ld-del" id="f8-r10"><td class="ld-no">10</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>  name            = &quot;wren-maintenance&quot;</td></tr><tr class="ld-row ld-del" id="f8-r11"><td class="ld-no">11</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>  cluster         = aws_ecs_cluster.wren.name</td></tr><tr class="ld-row ld-del" id="f8-r12"><td class="ld-no">12</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>  task_definition = aws_ecs_task_definition.maintenance.arn</td></tr><tr class="ld-row ld-del" id="f8-r13"><td class="ld-no">13</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>  desired_count   = 1</td></tr><tr class="ld-row ld-del" id="f8-r14"><td class="ld-no">14</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>}</td></tr></tbody></table></div><div class="ld-gutter"><aside class="ld-note" id="f8n0" data-ld-row="f8-r0"><p>Anchored by row index: the first row of this file's diff, whatever
+it is.</p>
+</aside></div></div></details></section><section class="ld-chapter" id="ch-c3"><h2 class="ld-chapter-title">Housekeeping</h2><div class="ld-chapter-note"><p>Dependency bumps, the README, a binary, and generated output. Folded
+shut; the lock file and the binary are here for completeness.</p>
+</div></section><section class="ld-file" id="f9" data-ld-path="NOTES"><div class="ld-filenote"><p>A file with no newline at the end; the marker renders as a message row.</p>
+</div><details class="ld-fileblock"><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">NOTES</code><span class="ld-badge ld-badge-add">added</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+1</span><span class="ld-stat ld-stat-del">−0</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f9-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-add" id="f9-r1"><td class="ld-no"></td><td class="ld-no">1</td><td class="ld-text"><span class="ld-sign">+</span>no newline at the end</td></tr><tr class="ld-row ld-message" id="f9-r2"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">No newline at end of file</td></tr></tbody></table></div><div class="ld-gutter"></div></div></details></section><section class="ld-file" id="f10" data-ld-path="README.md"><div class="ld-filenote"><p>What a developer sees <a class="ld-cat-flag" id="flag-first-build-2" href="#cat-first-build" data-ld-target="cat-first-build" data-ld-cat="regression" style="--cat:#555555;--cat-ink:#ffffff" title="Regression 1: The dev image is no longer pulled, so a first checkout
+builds it, and a dependency change rebuilds it."><span class="ld-cat-badge">X1</span></a>.</p>
+</div><details class="ld-fileblock" open><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">README.md</code><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+3</span><span class="ld-stat ld-stat-del">−2</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f10-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-context" id="f10-r1"><td class="ld-no">1</td><td class="ld-no">1</td><td class="ld-text"><span class="ld-sign"> </span># wren</td></tr><tr class="ld-row ld-context" id="f10-r2"><td class="ld-no">2</td><td class="ld-no">2</td><td class="ld-text"><span class="ld-sign"> </span>&nbsp;</td></tr><tr class="ld-row ld-del" id="f10-r3"><td class="ld-no">3</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>Run `docker compose up` and visit http://localhost:8000.</td></tr><tr class="ld-row ld-add" id="f10-r4"><td class="ld-no"></td><td class="ld-no">3</td><td class="ld-text"><span class="ld-sign">+</span>Run `docker compose up` and visit http://localhost:8000. The image is built</td></tr><tr class="ld-row ld-add" id="f10-r5"><td class="ld-no"></td><td class="ld-no">4</td><td class="ld-text"><span class="ld-sign">+</span>locally, so a dependency change is picked up on the next start.</td></tr><tr class="ld-row ld-context" id="f10-r6"><td class="ld-no">4</td><td class="ld-no">5</td><td class="ld-text"><span class="ld-sign"> </span>&nbsp;</td></tr><tr class="ld-row ld-del ld-marked" id="f10-r7" data-ld-notes="f10n0"><td class="ld-no">5</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>Deploys build a fresh image from the `prod` branch.</td></tr><tr class="ld-row ld-add" id="f10-r8"><td class="ld-no"></td><td class="ld-no">6</td><td class="ld-text"><span class="ld-sign">+</span>Deploys promote the image CI tested; nothing is built at deploy time.</td></tr></tbody></table></div><div class="ld-gutter"><aside class="ld-note" id="f10n0" data-ld-row="f10-r7"><p>Anchored by old-side line number: line 5 of the old file, the
+sentence that no longer holds.</p>
+</aside></div></div></details></section><section class="ld-file" id="f11" data-ld-path="dist/bundle.js"><details class="ld-fileblock" open><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">dist/bundle.js</code><span class="ld-badge ld-badge-del">deleted</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+0</span><span class="ld-stat ld-stat-del">−1</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f11-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-del" id="f11-r1"><td class="ld-no">1</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>console.log(&quot;built 2026-08-01&quot;)</td></tr></tbody></table></div><div class="ld-gutter"></div></div></details></section><section class="ld-file" id="f12" data-ld-path="requirements.lock"><div class="ld-filenote"><p>Collapsed by the <code>collapse:</code> list, since nobody reads a lock file.</p>
+</div><details class="ld-fileblock"><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">requirements.lock</code><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+4</span><span class="ld-stat ld-stat-del">−2</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f12-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-del" id="f12-r1"><td class="ld-no">1</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>certifi==2024.2.2</td></tr><tr class="ld-row ld-add" id="f12-r2"><td class="ld-no"></td><td class="ld-no">1</td><td class="ld-text"><span class="ld-sign">+</span>blinker==1.8.2</td></tr><tr class="ld-row ld-add" id="f12-r3"><td class="ld-no"></td><td class="ld-no">2</td><td class="ld-text"><span class="ld-sign">+</span>certifi==2024.7.4</td></tr><tr class="ld-row ld-context" id="f12-r4"><td class="ld-no">2</td><td class="ld-no">3</td><td class="ld-text"><span class="ld-sign"> </span>click==8.1.7</td></tr><tr class="ld-row ld-del" id="f12-r5"><td class="ld-no">3</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>flask==3.0.0</td></tr><tr class="ld-row ld-add" id="f12-r6"><td class="ld-no"></td><td class="ld-no">4</td><td class="ld-text"><span class="ld-sign">+</span>flask==3.0.1</td></tr><tr class="ld-row ld-context" id="f12-r7"><td class="ld-no">4</td><td class="ld-no">5</td><td class="ld-text"><span class="ld-sign"> </span>gunicorn==22.0.0</td></tr><tr class="ld-row ld-add" id="f12-r8"><td class="ld-no"></td><td class="ld-no">6</td><td class="ld-text"><span class="ld-sign">+</span>itsdangerous==2.2.0</td></tr></tbody></table></div><div class="ld-gutter"></div></div></details></section><section class="ld-file" id="f13" data-ld-path="requirements.txt"><div class="ld-filenote"><p>A dependency bump that rides along.</p>
+</div><details class="ld-fileblock" open><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">requirements.txt</code><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+1</span><span class="ld-stat ld-stat-del">−1</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f13-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-del" id="f13-r1"><td class="ld-no">1</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>flask==3.0.0</td></tr><tr class="ld-row ld-add" id="f13-r2"><td class="ld-no"></td><td class="ld-no">1</td><td class="ld-text"><span class="ld-sign">+</span>flask==3.0.1</td></tr><tr class="ld-row ld-context" id="f13-r3"><td class="ld-no">2</td><td class="ld-no">2</td><td class="ld-text"><span class="ld-sign"> </span>gunicorn==22.0.0</td></tr></tbody></table></div><div class="ld-gutter"></div></div></details></section><section class="ld-file" id="f14" data-ld-path="maintenance-page.png"><div class="ld-filenote"><p>A binary; the payload is not shown.</p>
+</div><details class="ld-fileblock"><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="infra">wren-terraform</span><code class="ld-path">maintenance-page.png</code><span class="ld-badge ld-badge-del">deleted</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+0</span><span class="ld-stat ld-stat-del">−0</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-message" id="f14-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">Binary file not shown</td></tr></tbody></table></div><div class="ld-gutter"></div></div></details></section><section class="ld-file" id="f15" data-ld-path="variables.tf"><div class="ld-filenote"><p>New, and folded shut.</p>
+</div><details class="ld-fileblock"><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="infra">wren-terraform</span><code class="ld-path">variables.tf</code><span class="ld-badge ld-badge-add">added</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+3</span><span class="ld-stat ld-stat-del">−0</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f15-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-add" id="f15-r1"><td class="ld-no"></td><td class="ld-no">1</td><td class="ld-text"><span class="ld-sign">+</span>variable &quot;subnets&quot; { type = list(string) }</td></tr><tr class="ld-row ld-add" id="f15-r2"><td class="ld-no"></td><td class="ld-no">2</td><td class="ld-text"><span class="ld-sign">+</span>variable &quot;vpc_id&quot; { type = string }</td></tr><tr class="ld-row ld-add" id="f15-r3"><td class="ld-no"></td><td class="ld-no">3</td><td class="ld-text"><span class="ld-sign">+</span>variable &quot;github_oidc_provider_arn&quot; { type = string }</td></tr></tbody></table></div><div class="ld-gutter"></div></div></details></section>
+  <footer class="ld-footer">Generated by literate-diff.</footer>
+</main>
+</div>
+<script>window.LD_ANCHORS = {"f0": {"file": 0, "start": 0, "end": 38}, "file-infra-ecr.tf": {"file": 0, "start": 0, "end": 38}, "retention-split": {"file": 0, "start": 13, "end": 13}, "f0n0": {"file": 0, "start": 6, "end": 10}, "f0n1": {"file": 0, "start": 27, "end": 27}, "f0n2": {"file": 0, "start": 19, "end": 19}, "f1": {"file": 1, "start": 0, "end": 9}, "file-infra-iam.tf": {"file": 1, "start": 0, "end": 9}, "f1n0": {"file": 1, "start": 6, "end": 6}, "old-subject": {"file": 1, "start": 4, "end": 4}, "f2": {"file": 2, "start": 0, "end": 22}, "file-app-Dockerfile": {"file": 2, "start": 0, "end": 22}, "stage-prod": {"file": 2, "start": 10, "end": 10}, "stage-test": {"file": 2, "start": 17, "end": 17}, "f2s2": {"file": 2, "start": 21, "end": 21}, "bake-settings": {"file": 2, "start": 12, "end": 12}, "f2n1": {"file": 2, "start": 13, "end": 13}, "f3": {"file": 3, "start": 0, "end": 6}, "file-app-app-__init__.py": {"file": 3, "start": 0, "end": 6}, "f3n0": {"file": 3, "start": 5, "end": 5}, "f4": {"file": 4, "start": 0, "end": 3}, "file-app-app-settings.py": {"file": 4, "start": 0, "end": 3}, "f5": {"file": 5, "start": 0, "end": 4}, "file-app-app-settings_prod.py": {"file": 5, "start": 0, "end": 4}, "f5n0": {"file": 5, "start": 4, "end": 4}, "f6": {"file": 6, "start": 0, "end": 35}, "file-app-.github-workflows-deploy.yml": {"file": 6, "start": 0, "end": 35}, "resolve": {"file": 6, "start": 22, "end": 22}, "f6n0": {"file": 6, "start": 11, "end": 12}, "f6n1": {"file": 6, "start": 13, "end": 13}, "f6n2": {"file": 6, "start": 17, "end": 17}, "f6n3": {"file": 6, "start": 26, "end": 27}, "f7": {"file": 7, "start": 0, "end": 11}, "file-infra-ingress.tf": {"file": 7, "start": 0, "end": 11}, "f7n0": {"file": 7, "start": 6, "end": 7}, "f7n1": {"file": 7, "start": 10, "end": 10}, "f8": {"file": 8, "start": 0, "end": 14}, "file-infra-maintenance.tf": {"file": 8, "start": 0, "end": 14}, "f8n0": {"file": 8, "start": 0, "end": 0}, "f9": {"file": 9, "start": 0, "end": 2}, "file-app-NOTES": {"file": 9, "start": 0, "end": 2}, "f10": {"file": 10, "start": 0, "end": 8}, "file-app-README.md": {"file": 10, "start": 0, "end": 8}, "f10n0": {"file": 10, "start": 7, "end": 7}, "f11": {"file": 11, "start": 0, "end": 1}, "file-app-dist-bundle.js": {"file": 11, "start": 0, "end": 1}, "f12": {"file": 12, "start": 0, "end": 8}, "file-app-requirements.lock": {"file": 12, "start": 0, "end": 8}, "f13": {"file": 13, "start": 0, "end": 3}, "file-app-requirements.txt": {"file": 13, "start": 0, "end": 3}, "f14": {"file": 14, "start": 0, "end": 0}, "file-infra-maintenance-page.png": {"file": 14, "start": 0, "end": 0}, "f15": {"file": 15, "start": 0, "end": 3}, "file-infra-variables.tf": {"file": 15, "start": 0, "end": 3}, "registry": {"file": 0, "start": 0, "end": 38}, "image": {"file": 2, "start": 0, "end": 22}, "deploy": {"file": 6, "start": 0, "end": 35}, "c3": {"file": 9, "start": 0, "end": 2}};</script>
+<script>(function () {
+  "use strict";
+
+  var ANCHORS = window.LD_ANCHORS || {};
+  var NARROW = window.matchMedia("(max-width: 62rem)");
+
+  function rowIndex(note) {
+    var m = /-r(\d+)$/.exec(note.dataset.ldRow || "");
+    return m ? parseInt(m[1], 10) : 0;
+  }
+
+  function rowsFor(targetId) {
+    var a = ANCHORS[targetId];
+    if (!a) return [];
+    var out = [];
+    for (var i = a.start; i <= a.end; i++) {
+      var el = document.getElementById("f" + a.file + "-r" + i);
+      if (el) out.push(el);
+    }
+    return out;
+  }
+
+  /* --- sidenote placement -------------------------------------------------- */
+
+  function placeNotes() {
+    var wide = !NARROW.matches;
+    document.querySelectorAll(".ld-file").forEach(function (file) {
+      var gutter = file.querySelector(".ld-gutter");
+      if (!gutter) return;
+      var notes = Array.prototype.slice.call(file.querySelectorAll(".ld-note"));
+      if (!notes.length) return;
+
+      if (!wide) {
+        // Narrow: fold each note into the table, just below the line it is
+        // about, rather than stacking them all after the diff.
+        notes.forEach(function (note) {
+          var row = document.getElementById(note.dataset.ldRow);
+          if (!row) return;
+          var host = note.parentElement;
+          if (host && host.classList.contains("ld-noterow-cell")) return;
+          var tr = document.createElement("tr");
+          tr.className = "ld-noterow";
+          var td = document.createElement("td");
+          td.className = "ld-noterow-cell";
+          td.colSpan = 3;
+          td.appendChild(note);
+          tr.appendChild(td);
+          row.after(tr);
+          note.style.top = "";
+        });
+        gutter.style.minHeight = "";
+        return;
+      }
+
+      // Wide: notes belong in the margin. Undo any inline folding.
+      notes.forEach(function (note) {
+        var cell = note.parentElement;
+        if (cell && cell.classList.contains("ld-noterow-cell")) {
+          gutter.appendChild(note);
+          var tr = cell.parentElement;
+          if (tr) tr.remove();
+        }
+      });
+      // Place in anchor order, so the push-down below never runs backwards.
+      notes.sort(function (a, b) { return rowIndex(a) - rowIndex(b); });
+      notes.forEach(function (n) { gutter.appendChild(n); });
+      var gTop = gutter.getBoundingClientRect().top;
+      var floor = 0;
+      notes.forEach(function (note) {
+        var row = document.getElementById(note.dataset.ldRow);
+        if (!row) return;
+        var want = row.getBoundingClientRect().top - gTop;
+        var top = Math.max(want, floor);
+        note.style.top = top + "px";
+        floor = top + note.offsetHeight + 12;
+      });
+      // Keep the gutter tall enough that stacked notes are not clipped.
+      gutter.style.minHeight = floor + "px";
+    });
+  }
+
+  var raf = null;
+  function schedulePlace() {
+    // requestAnimationFrame does not fire while the document is hidden, which
+    // would leave notes unplaced in a background tab until it is next shown.
+    if (document.hidden) {
+      placeNotes();
+      return;
+    }
+    if (raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(function () { raf = null; placeNotes(); });
+  }
+  document.addEventListener("visibilitychange", schedulePlace);
+  window.ldPlaceNotes = placeNotes;
+
+  /* --- navigation ---------------------------------------------------------- */
+
+  function reveal(targetId) {
+    var rows = rowsFor(targetId);
+    var el = document.getElementById(targetId);
+    var focus = rows[0] || el;
+    if (!focus) return;
+
+    var block = focus.closest("details.ld-fileblock");
+    if (block && !block.open) {
+      block.open = true;
+      placeNotes();
+    }
+    focus.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    document.querySelectorAll(".ld-flash").forEach(function (n) {
+      n.classList.remove("ld-flash");
+    });
+    var flash = rows.length ? rows : el ? [el] : [];
+    flash.forEach(function (n) {
+      n.classList.remove("ld-flash");
+      void n.offsetWidth;
+      n.classList.add("ld-flash");
+    });
+    if (el && el.classList.contains("ld-note")) {
+      document.querySelectorAll(".ld-note-active").forEach(function (n) {
+        n.classList.remove("ld-note-active");
+      });
+      el.classList.add("ld-note-active");
+    }
+  }
+
+  document.addEventListener("click", function (ev) {
+    var jump = ev.target.closest("[data-ld-target]");
+    if (jump && !jump.classList.contains("ld-quote-btn")) {
+      ev.preventDefault();
+      var id = jump.dataset.ldTarget;
+      history.replaceState(null, "", "#" + id);
+      reveal(id);
+      return;
+    }
+    var btn = ev.target.closest(".ld-quote-btn");
+    if (btn) {
+      ev.preventDefault();
+      var body = btn.nextElementSibling;
+      if (!body) return;
+      var open = body.hasAttribute("hidden");
+      body.toggleAttribute("hidden", !open);
+      btn.setAttribute("aria-expanded", String(open));
+      schedulePlace();
+    }
+  });
+
+  document.addEventListener("toggle", function (ev) {
+    if (ev.target.classList && ev.target.classList.contains("ld-fileblock")) {
+      schedulePlace();
+    }
+  }, true);
+
+  /* --- hovering a marked line highlights its notes -------------------------- */
+
+  document.addEventListener("mouseover", function (ev) {
+    var row = ev.target.closest && ev.target.closest(".ld-marked");
+    if (!row) return;
+    document.querySelectorAll(".ld-note-active").forEach(function (n) {
+      n.classList.remove("ld-note-active");
+    });
+    (row.dataset.ldNotes || "").split(",").forEach(function (id) {
+      var n = document.getElementById(id);
+      if (n) n.classList.add("ld-note-active");
+    });
+  });
+
+  /* --- category flags: hover shows the item being cited ---------------------- */
+
+  var tip = null;
+  function hideTip() {
+    if (tip) { tip.remove(); tip = null; }
+    document.querySelectorAll(".ld-flag-active").forEach(function (n) {
+      n.classList.remove("ld-flag-active");
+    });
+  }
+  function showTip(flag) {
+    hideTip();
+    var item = document.getElementById(flag.dataset.ldTarget);
+    if (!item) return;
+    var body = item.cloneNode(true);
+    body.querySelectorAll(".ld-cat-badge, .ld-cat-where").forEach(function (n) { n.remove(); });
+    body.removeAttribute("id");
+    tip = document.createElement("div");
+    tip.className = "ld-cat-tip";
+    tip.style.cssText = flag.style.cssText;
+    var head = document.createElement("div");
+    head.className = "ld-cat-tip-head";
+    head.textContent = (flag.getAttribute("title") || "").split(":")[0];
+    tip.appendChild(head);
+    var content = document.createElement("div");
+    content.innerHTML = body.innerHTML;
+    tip.appendChild(content);
+    document.body.appendChild(tip);
+    var r = flag.getBoundingClientRect();
+    var left = r.left + window.scrollX;
+    var maxLeft = window.scrollX + document.documentElement.clientWidth - tip.offsetWidth - 12;
+    tip.style.left = Math.max(window.scrollX + 8, Math.min(left, maxLeft)) + "px";
+    tip.style.top = (r.bottom + window.scrollY + 8) + "px";
+    flag.classList.add("ld-flag-active");
+    // The title attribute is kept for accessibility and no-JS readers; suppress
+    // the browser's own tooltip while ours is showing.
+    flag.dataset.ldTitle = flag.getAttribute("title");
+    flag.removeAttribute("title");
+  }
+  document.addEventListener("mouseover", function (ev) {
+    var flag = ev.target.closest && ev.target.closest(".ld-cat-flag");
+    if (flag) showTip(flag);
+  });
+  document.addEventListener("mouseout", function (ev) {
+    var flag = ev.target.closest && ev.target.closest(".ld-cat-flag");
+    if (!flag) return;
+    if (flag.dataset.ldTitle) {
+      flag.setAttribute("title", flag.dataset.ldTitle);
+      delete flag.dataset.ldTitle;
+    }
+    hideTip();
+  });
+  document.addEventListener("scroll", hideTip, true);
+
+  /* --- table of contents current-file tracking ------------------------------ */
+
+  function trackToc() {
+    var files = document.querySelectorAll(".ld-file");
+    if (!files.length || !("IntersectionObserver" in window)) return;
+    var links = {};
+    document.querySelectorAll(".ld-toc-file > a").forEach(function (a) {
+      links[a.dataset.ldTarget] = a.parentElement;
+    });
+    var seen = new Set();
+    var obs = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) seen.add(e.target.id);
+          else seen.delete(e.target.id);
+        });
+        Object.keys(links).forEach(function (id) {
+          links[id].classList.toggle("ld-current", seen.has(id));
+        });
+      },
+      { rootMargin: "-10% 0px -70% 0px" }
+    );
+    files.forEach(function (f) { obs.observe(f); });
+  }
+
+  /* --- boot ---------------------------------------------------------------- */
+
+  function boot() {
+    placeNotes();
+    trackToc();
+    if (location.hash.length > 1) reveal(location.hash.slice(1));
+  }
+
+  window.addEventListener("resize", schedulePlace);
+  window.addEventListener("hashchange", function () {
+    if (location.hash.length > 1) reveal(location.hash.slice(1));
+  });
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(schedulePlace);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
+})();
+</script>
+</body></html>
