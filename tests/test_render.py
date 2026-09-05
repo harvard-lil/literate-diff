@@ -99,9 +99,9 @@ def test_anchor_map_is_emitted_for_the_client():
     payload = re.search(r"window\.LD_ANCHORS = (\{.*?\});", page, re.S).group(1)
     anchors = json.loads(payload)
     # Row 0 is the hunk header, row 1 the deletion, row 2 the addition matched here.
-    assert anchors["secret"] == {"file": 0, "start": 2, "end": 2}
+    assert anchors["secret"] == {"body": "f0", "start": 2, "end": 2}
     # Files are addressable too, by index and by path.
-    assert anchors["f1"]["file"] == 1
+    assert anchors["f1"]["body"] == "f1"
     assert "file-second.py" in anchors
 
 
@@ -134,3 +134,58 @@ def test_cli_creates_missing_output_directories(tmp_path):
     out = tmp_path / "nested" / "deeper" / "page.html"
     assert main(["--diff", str(diff), "-o", str(out)]) == 0
     assert out.exists() and "<style>" in out.read_text(encoding="utf-8")
+
+
+# --- files that ship as rows rather than markup --------------------------------
+
+
+def test_a_collapsed_file_ships_its_rows_as_data():
+    page = build({"collapse": ["second.py"]})
+    payload = re.search(r"window\.LD_ROWS = (\{.*?\});", page, re.S).group(1)
+    rows = json.loads(payload)
+    body = page[page.index('<main class="ld-main">') :]
+    # The open file is markup; the collapsed one is data.
+    assert 'id="f0-r1"' in body
+    assert 'id="f1-r1"' not in body
+    assert list(rows) == ["f1"]
+    assert rows["f1"]["rows"][1][:4] == ["d", 1, 0, "import first"]
+    assert 'data-ld-lazy="f1"' in body
+
+
+def test_an_open_file_is_not_deferred():
+    page = build({})
+    assert re.search(r"window\.LD_ROWS = (\{.*?\});", page, re.S).group(1) == "{}"
+    body = page[page.index('<main class="ld-main">') : page.index("<script>")]
+    assert "data-ld-lazy" not in body
+
+
+def test_a_collapsed_file_keeps_its_sections_notes_and_anchors():
+    spec = {
+        "collapse": ["first.py"],
+        "files": {
+            "first.py": {
+                "sections": [{"at": "os.environ", "id": "sec", "title": "The switch"}],
+                "notes": [{"at": "os.environ", "id": "sn", "text": "A sidenote."}],
+            }
+        },
+    }
+    page = build(spec)
+    body = page[page.index('<main class="ld-main">') :]
+    rows = json.loads(re.search(r"window\.LD_ROWS = (\{.*?\});", page, re.S).group(1))
+    # The section rides with the rows, at the index it anchors to.
+    assert "The switch" in rows["f0"]["sections"]["2"]
+    assert rows["f0"]["rows"][2][4] == "sn"
+    # The sidenote itself stays in the markup, since it is not inside the table.
+    assert 'id="sn"' in body and "A sidenote." in body
+    # And both are still addressable.
+    anchors = json.loads(re.search(r"window\.LD_ANCHORS = (\{.*?\});", page, re.S).group(1))
+    assert anchors["sec"] == {"body": "f0", "start": 2, "end": 2}
+
+
+def test_the_client_is_told_how_to_read_the_rows():
+    # kind, old line, new line, text, the ids of any sidenotes on the row.
+    page = build({"collapse": ["*"]})
+    rows = json.loads(re.search(r"window\.LD_ROWS = (\{.*?\});", page, re.S).group(1))
+    kinds = [r[0] for r in rows["f0"]["rows"]]
+    assert kinds == ["h", "d", "a"]
+    assert rows["f0"]["rows"][2] == ["a", 0, 1, 'SECRET = os.environ["SECRET"]', ""]

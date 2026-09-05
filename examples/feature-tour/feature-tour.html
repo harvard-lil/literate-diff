@@ -516,20 +516,259 @@ li:target > .ld-cat-badge, .ld-cat-list > li.ld-flash { animation: ld-flash 1.6s
 }
 .ld-cat-tip p { margin: 0 0 0.4rem; }
 .ld-cat-tip > :last-child, .ld-cat-tip p:last-child { margin-bottom: 0; }
+
+/* --- appendix: the conversation ------------------------------------------- */
+
+.ld-appendix {
+  margin: 3.5rem 0 0;
+  padding-top: 1.5rem;
+  border-top: 3px double var(--rule-strong);
+}
+.ld-appendix-title { font-family: var(--serif); font-size: 1.5rem; margin: 0 0 0.25rem; }
+.ld-appendix-meta {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  margin-bottom: 1rem;
+}
+.ld-appendix-note, .ld-thread-note {
+  font-family: var(--serif);
+  color: var(--ink-soft);
+  max-width: 42rem;
+}
+.ld-appendix-note p, .ld-thread-note p { margin: 0 0 0.6rem; }
+
+.ld-threads { list-style: none; margin: 0 0 1.2rem; padding: 0; }
+.ld-thread-row {
+  padding: 0.3rem 0 0.45rem;
+  border-bottom: 1px solid var(--rule);
+  max-width: 42rem;
+}
+.ld-thread-head { display: flex; gap: 0.8rem; align-items: baseline; }
+.ld-thread-name { font-family: var(--serif); font-size: 0.9rem; }
+.ld-thread-count {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+.ld-thread-note { margin: 0.1rem 0 0; font-size: 0.88rem; }
+.ld-thread-note p { margin: 0; }
+
+.ld-achapter { margin: 2.6rem 0 1.4rem; max-width: 42rem; }
+.ld-achapter .ld-chapter-title { font-family: var(--serif); font-size: 1.15rem; margin: 0 0 0.4rem; }
+
+.ld-turn {
+  border-left: 2px solid var(--rule);
+  padding: 0.1rem 0 0.1rem 1rem;
+  margin: 0 0 1.6rem;
+}
+.ld-turn:target, .ld-turn.ld-flash { border-left-color: var(--accent); }
+.ld-turn-head {
+  display: flex;
+  gap: 0.7rem;
+  align-items: baseline;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  color: var(--ink-faint);
+  margin-bottom: 0.35rem;
+}
+.ld-turn-id { color: var(--ink-faint); text-decoration: none; }
+.ld-turn-id:hover { color: var(--accent); }
+.ld-turn-thread {
+  padding: 0 0.4em;
+  border-radius: 3px;
+  background: var(--hunk-bg);
+  color: var(--ink-soft);
+  font-size: 0.62rem;
+}
+.ld-turn-note {
+  font-family: var(--serif);
+  color: var(--ink-soft);
+  max-width: 42rem;
+  margin: 0 0 0.6rem;
+}
+.ld-turn-note p { margin: 0 0 0.5rem; }
+
+/* --- one message ---------------------------------------------------------- */
+
+.ld-msg { margin: 0 0 0.45rem; max-width: 46rem; }
+.ld-who {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 0.15rem;
+}
+.ld-msg-body {
+  font-family: var(--serif);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.ld-msg-prompt .ld-msg-body {
+  background: var(--accent-soft);
+  border-radius: 5px;
+  padding: 0.55rem 0.8rem;
+}
+.ld-msg-reply .ld-msg-body { padding: 0.1rem 0.8rem; }
+
+.ld-ppara, .ld-plist, .ld-ptablewrap, .ld-pcodeblock, .ld-pquote { margin: 0 0 0.55rem; }
+.ld-msg-body > :last-child { margin-bottom: 0; }
+.ld-pheadingline {
+  font-family: var(--serif);
+  font-weight: 600;
+  margin: 0.9rem 0 0.4rem;
+  line-height: 1.3;
+}
+h3.ld-pheadingline { font-size: 1.05rem; }
+h4.ld-pheadingline { font-size: 0.98rem; }
+h5.ld-pheadingline, h6.ld-pheadingline { font-size: 0.92rem; color: var(--ink-soft); }
+.ld-msg-body > .ld-pheadingline:first-child { margin-top: 0; }
+.ld-plist { padding-left: 1.3rem; }
+.ld-pitem { margin: 0 0 0.2rem; }
+.ld-prule { border-top: 1px solid var(--rule); margin: 0.8rem 0; }
+.ld-pquote {
+  border-left: 3px solid var(--rule-strong);
+  padding-left: 0.7rem;
+  margin-left: 0;
+  color: var(--ink-soft);
+}
+.ld-pcodeblock {
+  background: var(--hunk-bg);
+  border-radius: 4px;
+  padding: 0.45rem 0.65rem;
+  overflow-x: auto;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+.ld-pcodeblock code { font-family: var(--mono); }
+.ld-pcodeblock .ld-prow { display: block; white-space: pre; }
+.ld-msg-body code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  background: var(--hunk-bg);
+  border-radius: 3px;
+  padding: 0 0.25em;
+}
+.ld-pcodeblock code code { background: none; padding: 0; }
+.ld-msg-body a { color: var(--accent); }
+.ld-ptablewrap { overflow-x: auto; }
+.ld-ptableblock { border-collapse: collapse; font-size: 0.85rem; }
+.ld-ptableblock td {
+  border: 1px solid var(--rule);
+  padding: 0.15rem 0.5rem;
+  vertical-align: top;
+}
+.ld-ptableblock tr:first-child td { font-weight: 600; border-bottom: 2px solid var(--rule-strong); }
+
+.ld-msg:not(.is-open) .ld-elided { display: none; }
+.ld-msg.is-open .ld-gap { display: none; }
+.ld-gap { color: var(--ink-faint); }
+.ld-gap-block { margin: 0 0 0.55rem; letter-spacing: 0.1em; }
+.ld-msg-more {
+  display: block;
+  margin-top: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  color: var(--accent);
+  cursor: pointer;
+}
+.ld-msg-more:hover { text-decoration: underline; }
+.ld-prow.ld-flash { animation: ld-flash 1.6s ease-out; border-radius: 2px; }
+
+.ld-work {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.8rem;
+  align-items: baseline;
+  margin: 0.35rem 0 0.5rem;
+  padding: 0.25rem 0.75rem;
+  border-left: 2px solid var(--rule);
+  background: var(--note-bg);
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  color: var(--ink-faint);
+}
+.ld-work-counts { color: var(--ink-soft); }
+.ld-work-said {
+  font-family: var(--serif);
+  font-size: 0.78rem;
+  font-style: italic;
+  flex-basis: 100%;
+}
+
+.ld-cite {
+  font-size: 0.72em;
+  vertical-align: 0.35em;
+  padding: 0 0.1em 0 0.15em;
+  border-bottom: 0;
+  opacity: 0.75;
+}
+.ld-cite:hover { opacity: 1; }
+.ld-cite .ld-arrow { margin: 0; }
+
+.ld-quote-open { display: block; margin: 0.5rem 0; }
+.ld-quote-open .ld-quote-body {
+  display: block;
+  border-left: 3px solid var(--accent-soft);
+  padding: 0.1rem 0 0.1rem 0.9rem;
+}
+.ld-quote-open .ld-qhead { justify-content: flex-start; gap: 0.8rem; }
+.ld-quote-said .ld-qrow { font-family: var(--serif); font-size: 0.85rem; }
+.ld-quote-said .ld-qrow.ld-qblank { height: 0.4rem; }
+.ld-quote-said .ld-qcode { font-family: var(--mono); font-size: 0.76rem; }
+.ld-qwho {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+}
 </style>
 </head><body>
 <div class="ld-app">
 <nav class="ld-toc" aria-label="Contents">
   <div class="ld-toc-head">Contents</div>
-  <div class="ld-toc-chapter"><a href="#ch-registry" data-ld-target="ch-registry">1. A registry that keeps its promises</a></div><ol class="ld-toc-list"><li class="ld-toc-file"><a href="#f0" data-ld-target="f0"><span class="ld-toc-name">immutable tags, split retention</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>ecr.tf</span></a><ul class="ld-toc-sub"><li><a href="#retention-split" data-ld-target="retention-split">Deployed images and build candidates on separate rules</a></li></ul></li><li class="ld-toc-file"><a href="#f1" data-ld-target="f1"><span class="ld-toc-name">who may deploy</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>iam.tf</span></a></li></ol><div class="ld-toc-chapter"><a href="#ch-image" data-ld-target="ch-image">2. One image for every tier</a></div><ol class="ld-toc-list"><li class="ld-toc-file"><a href="#f2" data-ld-target="f2"><span class="ld-toc-name">four stages, one build graph</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>Dockerfile</span></a><ul class="ld-toc-sub"><li><a href="#stage-prod" data-ld-target="stage-prod">prod: the artifact that ships</a></li><li><a href="#stage-test" data-ld-target="stage-test">test: what CI runs the suite against</a></li><li><a href="#f2s2" data-ld-target="f2s2">dev: built locally, working tree mounted over it</a></li></ul></li><li class="ld-toc-file"><a href="#f3" data-ld-target="f3"><span class="ld-toc-name">the settings selector</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>app/__init__.py</span></a></li><li class="ld-toc-file"><a href="#f4" data-ld-target="f4"><span class="ld-toc-name">settings.py</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>app/settings.py</span></a></li><li class="ld-toc-file"><a href="#f5" data-ld-target="f5"><span class="ld-toc-name">settings_prod.py</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>app/settings_prod.py</span></a></li></ol><div class="ld-toc-chapter"><a href="#ch-deploy" data-ld-target="ch-deploy">3. The deploy stops building</a></div><ol class="ld-toc-list"><li class="ld-toc-file"><a href="#f6" data-ld-target="f6"><span class="ld-toc-name">promote, do not rebuild</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>.github/workflows/deploy.yml</span></a><ul class="ld-toc-sub"><li><a href="#resolve" data-ld-target="resolve">Resolve the tested image</a></li></ul></li><li class="ld-toc-file"><a href="#f7" data-ld-target="f7"><span class="ld-toc-name">faster checks, shorter drain</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>ingress.tf</span></a></li><li class="ld-toc-file"><a href="#f8" data-ld-target="f8"><span class="ld-toc-name">the maintenance page, removed</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>maintenance.tf</span></a></li></ol><div class="ld-toc-chapter"><a href="#ch-c3" data-ld-target="ch-c3">Housekeeping</a></div><ol class="ld-toc-list"><li class="ld-toc-file"><a href="#f9" data-ld-target="f9"><span class="ld-toc-name">NOTES</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>NOTES</span></a></li><li class="ld-toc-file"><a href="#f10" data-ld-target="f10"><span class="ld-toc-name">README.md</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>README.md</span></a></li><li class="ld-toc-file"><a href="#f11" data-ld-target="f11"><span class="ld-toc-name">bundle.js</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>dist/bundle.js</span></a></li><li class="ld-toc-file"><a href="#f12" data-ld-target="f12"><span class="ld-toc-name">requirements.lock</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>requirements.lock</span></a></li><li class="ld-toc-file"><a href="#f13" data-ld-target="f13"><span class="ld-toc-name">requirements.txt</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>requirements.txt</span></a></li><li class="ld-toc-file"><a href="#f14" data-ld-target="f14"><span class="ld-toc-name">maintenance-page.png</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>maintenance-page.png</span></a></li><li class="ld-toc-file"><a href="#f15" data-ld-target="f15"><span class="ld-toc-name">variables.tf</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>variables.tf</span></a></li></ol>
+  <div class="ld-toc-chapter"><a href="#ch-registry" data-ld-target="ch-registry">1. A registry that keeps its promises</a></div><ol class="ld-toc-list"><li class="ld-toc-file"><a href="#f0" data-ld-target="f0"><span class="ld-toc-name">immutable tags, split retention</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>ecr.tf</span></a><ul class="ld-toc-sub"><li><a href="#retention-split" data-ld-target="retention-split">Deployed images and build candidates on separate rules</a></li></ul></li><li class="ld-toc-file"><a href="#f1" data-ld-target="f1"><span class="ld-toc-name">who may deploy</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>iam.tf</span></a></li></ol><div class="ld-toc-chapter"><a href="#ch-image" data-ld-target="ch-image">2. One image for every tier</a></div><ol class="ld-toc-list"><li class="ld-toc-file"><a href="#f2" data-ld-target="f2"><span class="ld-toc-name">four stages, one build graph</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>Dockerfile</span></a><ul class="ld-toc-sub"><li><a href="#stage-prod" data-ld-target="stage-prod">prod: the artifact that ships</a></li><li><a href="#stage-test" data-ld-target="stage-test">test: what CI runs the suite against</a></li><li><a href="#f2s2" data-ld-target="f2s2">dev: built locally, working tree mounted over it</a></li></ul></li><li class="ld-toc-file"><a href="#f3" data-ld-target="f3"><span class="ld-toc-name">the settings selector</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>app/__init__.py</span></a></li><li class="ld-toc-file"><a href="#f4" data-ld-target="f4"><span class="ld-toc-name">settings.py</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>app/settings.py</span></a></li><li class="ld-toc-file"><a href="#f5" data-ld-target="f5"><span class="ld-toc-name">settings_prod.py</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>app/settings_prod.py</span></a></li></ol><div class="ld-toc-chapter"><a href="#ch-deploy" data-ld-target="ch-deploy">3. The deploy stops building</a></div><ol class="ld-toc-list"><li class="ld-toc-file"><a href="#f6" data-ld-target="f6"><span class="ld-toc-name">promote, do not rebuild</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>.github/workflows/deploy.yml</span></a><ul class="ld-toc-sub"><li><a href="#resolve" data-ld-target="resolve">Resolve the tested image</a></li></ul></li><li class="ld-toc-file"><a href="#f7" data-ld-target="f7"><span class="ld-toc-name">faster checks, shorter drain</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>ingress.tf</span></a></li><li class="ld-toc-file"><a href="#f8" data-ld-target="f8"><span class="ld-toc-name">the maintenance page, removed</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>maintenance.tf</span></a></li></ol><div class="ld-toc-chapter"><a href="#ch-c3" data-ld-target="ch-c3">Housekeeping</a></div><ol class="ld-toc-list"><li class="ld-toc-file"><a href="#f9" data-ld-target="f9"><span class="ld-toc-name">NOTES</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>NOTES</span></a></li><li class="ld-toc-file"><a href="#f10" data-ld-target="f10"><span class="ld-toc-name">README.md</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>README.md</span></a></li><li class="ld-toc-file"><a href="#f11" data-ld-target="f11"><span class="ld-toc-name">bundle.js</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>dist/bundle.js</span></a></li><li class="ld-toc-file"><a href="#f12" data-ld-target="f12"><span class="ld-toc-name">requirements.lock</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>requirements.lock</span></a></li><li class="ld-toc-file"><a href="#f13" data-ld-target="f13"><span class="ld-toc-name">requirements.txt</span><span class="ld-toc-path"><span class="ld-toc-src">wren</span>requirements.txt</span></a></li><li class="ld-toc-file"><a href="#f14" data-ld-target="f14"><span class="ld-toc-name">maintenance-page.png</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>maintenance-page.png</span></a></li><li class="ld-toc-file"><a href="#f15" data-ld-target="f15"><span class="ld-toc-name">variables.tf</span><span class="ld-toc-path"><span class="ld-toc-src">wren-terraform</span>variables.tf</span></a></li></ol><div class="ld-toc-chapter"><a href="#appendix" data-ld-target="appendix">Appendix</a></div><ol class="ld-toc-list"><li class="ld-toc-file"><a href="#ac-mechanism" data-ld-target="ac-mechanism"><span class="ld-toc-name">Deciding to promote rather than rebuild</span><span class="ld-toc-path">2 turns</span></a></li><li class="ld-toc-file"><a href="#ac-runtime" data-ld-target="ac-runtime"><span class="ld-toc-name">One image for every tier</span><span class="ld-toc-path">2 turns</span></a></li></ol>
 </nav>
 <main class="ld-main">
   <header class="ld-header">
     <h1>Promote, do not rebuild</h1>
     <p class="ld-subtitle">A feature tour of literate-diff on an invented two-repository change</p>
-    <div class="ld-metaline">2 repos · 16 files · <span class="ld-stat-add">+80</span> · <span class="ld-stat-del">−46</span></div>
+    <div class="ld-metaline">2 repos · 16 files · <a href="#appendix" data-ld-target="appendix">4 turns</a> · <span class="ld-stat-add">+80</span> · <span class="ld-stat-del">−46</span></div>
     <div class="ld-sources"><div class="ld-source-row"><span class="ld-src">wren</span><code class="ld-range">prod...main</code><span class="ld-src-count">10 files</span></div><div class="ld-source-row"><span class="ld-src">wren-terraform</span><code class="ld-range">main...deploy-by-digest</code><span class="ld-src-count">6 files</span></div></div>
-    <div class="ld-plot"><p>Before this change, every deploy built a fresh image on the <code>prod</code> branch
+    <div class="ld-plot"><h2>What changed</h2>
+<ul>
+<li><strong>The suite runs against the bytes that ship.</strong> CI used to build one image
+to test and the deploy built another from the same source; now it builds
+one, tests the <code>test</code> stage on top of it, and the deploy ships the image
+that passed.</li>
+<li><strong>A deploy is a tag, not a build</strong>, so it takes seconds rather than
+minutes and cannot produce something the suite has not seen.</li>
+<li><strong>No AWS keys in the workflow.</strong> The job assumes a role through GitHub's
+OIDC provider, and the trust policy names one environment rather than
+every branch in the repository.</li>
+</ul>
+<h2>What to take from this</h2>
+<p><strong>If you are setting up a deploy elsewhere.</strong> Promotion needs no service:
+the registry stores an image by digest, so shipping a tested image means
+adding a tag to a digest that is already there <a class="ld-ref ld-ref-forward ld-cite" href="#q-promotion" title="in the conversation" data-ld-target="q-promotion"><span class="ld-arrow" aria-hidden="true">↓</span></a>. Two
+registry settings make it safe -- immutable tags, and a lifecycle policy
+that expires deployed images more slowly than candidates. Drop the habit of
+copying a settings module in at build time; choose it at runtime and the
+second Dockerfile goes away <a class="ld-ref ld-ref-forward ld-cite" href="#q-settings" title="in the conversation" data-ld-target="q-settings"><span class="ld-arrow" aria-hidden="true">↓</span></a>.</p>
+<p><strong>If you review our AWS configuration.</strong> A deploy role whose trust policy
+names a branch can be assumed from any pushed branch. Name the environment
+instead <a class="ld-cat-flag" id="flag-oidc-3" href="#cat-oidc" data-ld-target="cat-oidc" data-ld-cat="security" style="--cat:#332288;--cat-ink:#ffffff" title="Security 1: Before, the deploy trusted repo:example/wren:*, so any branch
+could assume the deploy role. It now trusts the prod environment only."><span class="ld-cat-badge">S1</span></a>.</p>
+<h2>The story</h2>
+<p>Before this change, every deploy built a fresh image on the <code>prod</code> branch
 and pushed it as <code>latest</code>, with production settings copied into the image
 at build time and long-lived AWS keys in the workflow. The suite never ran
 against the bytes that shipped.</p>
@@ -538,6 +777,26 @@ built from <code>prod</code>, and publishes it tagged with the commit. The deplo
 resolves that tag to a digest and ships the digest. The registry refuses to
 move a commit tag, keeps deployed images longer than candidates, and the
 deploy role trusts one GitHub environment rather than every branch.</p>
+<p>The change was <span class="ld-quote ld-quote-said"><button type="button" class="ld-quote-btn" aria-expanded="false" data-ld-target="q-promotion-prompt">asked for as a question about testing what
+ships</button><span class="ld-quote-body" hidden><span class="ld-qhead"><span class="ld-qwho">Promoting an image instead of rebuilding it — said</span><a class="ld-qjump" href="#q-promotion-prompt" data-ld-target="q-promotion-prompt">go to context ↦</a></span><span class="ld-qrow ld-qprose"><span class="ld-qtext">How hard is it to test one image and then ship</span></span></span></span>, and the two properties that make promotion
+safe <a class="ld-ref ld-ref-forward" href="#q-promotion-response" data-ld-target="q-promotion-response"><span class="ld-arrow" aria-hidden="true">↓</span>came back with the answer</a>. The appendix at
+the end has the exchange.</p>
+<h2>How it happened</h2>
+<p>The order the decisions arrived in, which is not the order they are
+presented in above. Each entry cites the exchange it came from; the whole
+record is in the appendix.</p>
+<p><strong>1. Testing what ships</strong> (Monday). Every deploy rebuilt from source on the
+<code>prod</code> branch, so what shipped had never been tested. The answer was that
+no promotion service was needed, because the registry already stores an
+image by digest: <span class="ld-quote ld-quote-said ld-quote-open"><span class="ld-quote-body"><span class="ld-qhead"><span class="ld-qwho">Promoting an image instead of rebuilding it — replied</span><a class="ld-qjump" href="#p-promotion" data-ld-target="p-promotion">go to context ↦</a></span><span class="ld-qrow ld-qprose"><span class="ld-qtext">Promotion is a tag, not a copy:</span></span></span></span> <em>The work moved from building a
+mechanism to making two registry properties safe.</em></p>
+<p><strong>2. The keys, asked as an aside</strong> (Monday). Noticed in passing rather than
+planned <a class="ld-ref ld-ref-forward ld-cite" href="#q-oidc" title="in the conversation" data-ld-target="q-oidc"><span class="ld-arrow" aria-hidden="true">↓</span></a>, and answered in the same batch. <em>Long-lived AWS
+keys left the workflow.</em></p>
+<p><strong>3. One image for every tier</strong> (Tuesday). The settings module was copied
+in at build time, which is why there were two Dockerfiles
+<a class="ld-ref ld-ref-forward ld-cite" href="#q-settings" title="in the conversation" data-ld-target="q-settings"><span class="ld-arrow" aria-hidden="true">↓</span></a>. <em>Choosing at runtime removed the second file and let
+<code>test</code> be built from <code>prod</code>.</em></p>
 <p>The chapters run in dependency order: the registry has to accept immutable
 tags before the workflow can rely on them.</p>
 <h2>Wins</h2>
@@ -546,7 +805,7 @@ number to see the item, click to come back. Each item lists where it is
 flagged.</p>
 <h3>Security</h3>
 <ol class="ld-cat-list" data-ld-cat="security" style="--cat:#332288;--cat-ink:#ffffff"><li id="cat-oidc" data-ld-cat="security"><span class="ld-cat-badge" style="--cat:#332288;--cat-ink:#ffffff" title="Security 1">S1</span>Before, the deploy trusted <code>repo:example/wren:*</code>, so any branch
-could assume the deploy role. It now trusts the <code>prod</code> environment only.<span class="ld-cat-where"><a class="ld-ref ld-ref-forward" href="#flag-oidc-1" data-ld-target="flag-oidc-1"><span class="ld-arrow" aria-hidden="true">↓</span>iam.tf</a> <a class="ld-ref ld-ref-forward" href="#flag-oidc-2" data-ld-target="flag-oidc-2"><span class="ld-arrow" aria-hidden="true">↓</span>deploy.yml</a></span></li><li id="cat-no-keys" data-ld-cat="security"><span class="ld-cat-badge" style="--cat:#332288;--cat-ink:#ffffff" title="Security 2">S2</span>Before, the workflow carried long-lived access keys as
+could assume the deploy role. It now trusts the <code>prod</code> environment only.<span class="ld-cat-where"><a class="ld-ref ld-ref-forward" href="#flag-oidc-1" data-ld-target="flag-oidc-1"><span class="ld-arrow" aria-hidden="true">↓</span>iam.tf</a> <a class="ld-ref ld-ref-forward" href="#flag-oidc-2" data-ld-target="flag-oidc-2"><span class="ld-arrow" aria-hidden="true">↓</span>deploy.yml</a> <a class="ld-ref ld-ref-here" href="#flag-oidc-3" data-ld-target="flag-oidc-3">here</a></span></li><li id="cat-no-keys" data-ld-cat="security"><span class="ld-cat-badge" style="--cat:#332288;--cat-ink:#ffffff" title="Security 2">S2</span>Before, the workflow carried long-lived access keys as
 repository secrets. It now assumes a role over OIDC.<span class="ld-cat-where"><a class="ld-ref ld-ref-forward" href="#flag-no-keys-1" data-ld-target="flag-no-keys-1"><span class="ld-arrow" aria-hidden="true">↓</span>deploy.yml</a> <a class="ld-ref ld-ref-forward" href="#flag-no-keys-2" data-ld-target="flag-no-keys-2"><span class="ld-arrow" aria-hidden="true">↓</span>deploy.yml</a></span></li><li id="cat-sha-pins" data-ld-cat="security"><span class="ld-cat-badge" style="--cat:#332288;--cat-ink:#ffffff" title="Security 3">S3</span>Before, actions were referenced by tag. They are pinned to a
 commit SHA.<span class="ld-cat-where"><a class="ld-ref ld-ref-forward" href="#flag-sha-pins-1" data-ld-target="flag-sha-pins-1"><span class="ld-arrow" aria-hidden="true">↓</span>deploy.yml</a> <a class="ld-ref ld-ref-forward" href="#flag-sha-pins-2" data-ld-target="flag-sha-pins-2"><span class="ld-arrow" aria-hidden="true">↓</span>deploy.yml</a></span></li></ol>
 <h3>Correctness</h3>
@@ -577,7 +836,8 @@ version.<span class="ld-cat-where"><a class="ld-ref ld-ref-forward" href="#flag-
   </header>
   <section class="ld-chapter" id="ch-registry"><h2 class="ld-chapter-title">1. A registry that keeps its promises</h2><div class="ld-chapter-note"><p>Promotion by digest is only safe if tags cannot move, and only useful
 if the promoted image survives. Both are properties of the registry, so
-they come first.</p>
+they come first. The long-lived keys went in the <a class="ld-ref ld-ref-forward" href="#q-oidc" data-ld-target="q-oidc"><span class="ld-arrow" aria-hidden="true">↓</span>same
+sweep</a>.</p>
 </div></section><section class="ld-file" id="f0" data-ld-path="ecr.tf"><div class="ld-filenote"><p>The two registry properties the rest of the change depends on
 <a class="ld-cat-flag" id="flag-immutable-1" href="#cat-immutable" data-ld-target="cat-immutable" data-ld-cat="reliability" style="--cat:#117733;--cat-ink:#ffffff" title="Reliability 1: Before, a re-run could repoint a commit tag at different
 bytes. Commit tags are immutable; only latest moves."><span class="ld-cat-badge">R1</span></a> <a class="ld-cat-flag" id="flag-retention-1" href="#cat-retention" data-ld-target="cat-retention" data-ld-cat="reliability" style="--cat:#117733;--cat-ink:#ffffff" title="Reliability 2: Before, &amp;quot;keep last 5&amp;quot; expired the image production was
@@ -670,24 +930,97 @@ it is.</p>
 </aside></div></div></details></section><section class="ld-chapter" id="ch-c3"><h2 class="ld-chapter-title">Housekeeping</h2><div class="ld-chapter-note"><p>Dependency bumps, the README, a binary, and generated output. Folded
 shut; the lock file and the binary are here for completeness.</p>
 </div></section><section class="ld-file" id="f9" data-ld-path="NOTES"><div class="ld-filenote"><p>A file with no newline at the end; the marker renders as a message row.</p>
-</div><details class="ld-fileblock"><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">NOTES</code><span class="ld-badge ld-badge-add">added</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+1</span><span class="ld-stat ld-stat-del">−0</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f9-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-add" id="f9-r1"><td class="ld-no"></td><td class="ld-no">1</td><td class="ld-text"><span class="ld-sign">+</span>no newline at the end</td></tr><tr class="ld-row ld-message" id="f9-r2"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">No newline at end of file</td></tr></tbody></table></div><div class="ld-gutter"></div></div></details></section><section class="ld-file" id="f10" data-ld-path="README.md"><div class="ld-filenote"><p>What a developer sees <a class="ld-cat-flag" id="flag-first-build-2" href="#cat-first-build" data-ld-target="cat-first-build" data-ld-cat="regression" style="--cat:#555555;--cat-ink:#ffffff" title="Regression 1: The dev image is no longer pulled, so a first checkout
+</div><details class="ld-fileblock" data-ld-lazy="f9"><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">NOTES</code><span class="ld-badge ld-badge-add">added</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+1</span><span class="ld-stat ld-stat-del">−0</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody></tbody></table></div><div class="ld-gutter"></div></div></details></section><section class="ld-file" id="f10" data-ld-path="README.md"><div class="ld-filenote"><p>What a developer sees <a class="ld-cat-flag" id="flag-first-build-2" href="#cat-first-build" data-ld-target="cat-first-build" data-ld-cat="regression" style="--cat:#555555;--cat-ink:#ffffff" title="Regression 1: The dev image is no longer pulled, so a first checkout
 builds it, and a dependency change rebuilds it."><span class="ld-cat-badge">X1</span></a>.</p>
 </div><details class="ld-fileblock" open><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">README.md</code><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+3</span><span class="ld-stat ld-stat-del">−2</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f10-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-context" id="f10-r1"><td class="ld-no">1</td><td class="ld-no">1</td><td class="ld-text"><span class="ld-sign"> </span># wren</td></tr><tr class="ld-row ld-context" id="f10-r2"><td class="ld-no">2</td><td class="ld-no">2</td><td class="ld-text"><span class="ld-sign"> </span>&nbsp;</td></tr><tr class="ld-row ld-del" id="f10-r3"><td class="ld-no">3</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>Run `docker compose up` and visit http://localhost:8000.</td></tr><tr class="ld-row ld-add" id="f10-r4"><td class="ld-no"></td><td class="ld-no">3</td><td class="ld-text"><span class="ld-sign">+</span>Run `docker compose up` and visit http://localhost:8000. The image is built</td></tr><tr class="ld-row ld-add" id="f10-r5"><td class="ld-no"></td><td class="ld-no">4</td><td class="ld-text"><span class="ld-sign">+</span>locally, so a dependency change is picked up on the next start.</td></tr><tr class="ld-row ld-context" id="f10-r6"><td class="ld-no">4</td><td class="ld-no">5</td><td class="ld-text"><span class="ld-sign"> </span>&nbsp;</td></tr><tr class="ld-row ld-del ld-marked" id="f10-r7" data-ld-notes="f10n0"><td class="ld-no">5</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>Deploys build a fresh image from the `prod` branch.</td></tr><tr class="ld-row ld-add" id="f10-r8"><td class="ld-no"></td><td class="ld-no">6</td><td class="ld-text"><span class="ld-sign">+</span>Deploys promote the image CI tested; nothing is built at deploy time.</td></tr></tbody></table></div><div class="ld-gutter"><aside class="ld-note" id="f10n0" data-ld-row="f10-r7"><p>Anchored by old-side line number: line 5 of the old file, the
 sentence that no longer holds.</p>
 </aside></div></div></details></section><section class="ld-file" id="f11" data-ld-path="dist/bundle.js"><details class="ld-fileblock" open><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">dist/bundle.js</code><span class="ld-badge ld-badge-del">deleted</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+0</span><span class="ld-stat ld-stat-del">−1</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f11-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-del" id="f11-r1"><td class="ld-no">1</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>console.log(&quot;built 2026-08-01&quot;)</td></tr></tbody></table></div><div class="ld-gutter"></div></div></details></section><section class="ld-file" id="f12" data-ld-path="requirements.lock"><div class="ld-filenote"><p>Collapsed by the <code>collapse:</code> list, since nobody reads a lock file.</p>
-</div><details class="ld-fileblock"><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">requirements.lock</code><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+4</span><span class="ld-stat ld-stat-del">−2</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f12-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-del" id="f12-r1"><td class="ld-no">1</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>certifi==2024.2.2</td></tr><tr class="ld-row ld-add" id="f12-r2"><td class="ld-no"></td><td class="ld-no">1</td><td class="ld-text"><span class="ld-sign">+</span>blinker==1.8.2</td></tr><tr class="ld-row ld-add" id="f12-r3"><td class="ld-no"></td><td class="ld-no">2</td><td class="ld-text"><span class="ld-sign">+</span>certifi==2024.7.4</td></tr><tr class="ld-row ld-context" id="f12-r4"><td class="ld-no">2</td><td class="ld-no">3</td><td class="ld-text"><span class="ld-sign"> </span>click==8.1.7</td></tr><tr class="ld-row ld-del" id="f12-r5"><td class="ld-no">3</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>flask==3.0.0</td></tr><tr class="ld-row ld-add" id="f12-r6"><td class="ld-no"></td><td class="ld-no">4</td><td class="ld-text"><span class="ld-sign">+</span>flask==3.0.1</td></tr><tr class="ld-row ld-context" id="f12-r7"><td class="ld-no">4</td><td class="ld-no">5</td><td class="ld-text"><span class="ld-sign"> </span>gunicorn==22.0.0</td></tr><tr class="ld-row ld-add" id="f12-r8"><td class="ld-no"></td><td class="ld-no">6</td><td class="ld-text"><span class="ld-sign">+</span>itsdangerous==2.2.0</td></tr></tbody></table></div><div class="ld-gutter"></div></div></details></section><section class="ld-file" id="f13" data-ld-path="requirements.txt"><div class="ld-filenote"><p>A dependency bump that rides along.</p>
+</div><details class="ld-fileblock" data-ld-lazy="f12"><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">requirements.lock</code><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+4</span><span class="ld-stat ld-stat-del">−2</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody></tbody></table></div><div class="ld-gutter"></div></div></details></section><section class="ld-file" id="f13" data-ld-path="requirements.txt"><div class="ld-filenote"><p>A dependency bump that rides along.</p>
 </div><details class="ld-fileblock" open><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="app">wren</span><code class="ld-path">requirements.txt</code><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+1</span><span class="ld-stat ld-stat-del">−1</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f13-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-del" id="f13-r1"><td class="ld-no">1</td><td class="ld-no"></td><td class="ld-text"><span class="ld-sign">-</span>flask==3.0.0</td></tr><tr class="ld-row ld-add" id="f13-r2"><td class="ld-no"></td><td class="ld-no">1</td><td class="ld-text"><span class="ld-sign">+</span>flask==3.0.1</td></tr><tr class="ld-row ld-context" id="f13-r3"><td class="ld-no">2</td><td class="ld-no">2</td><td class="ld-text"><span class="ld-sign"> </span>gunicorn==22.0.0</td></tr></tbody></table></div><div class="ld-gutter"></div></div></details></section><section class="ld-file" id="f14" data-ld-path="maintenance-page.png"><div class="ld-filenote"><p>A binary; the payload is not shown.</p>
-</div><details class="ld-fileblock"><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="infra">wren-terraform</span><code class="ld-path">maintenance-page.png</code><span class="ld-badge ld-badge-del">deleted</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+0</span><span class="ld-stat ld-stat-del">−0</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-message" id="f14-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">Binary file not shown</td></tr></tbody></table></div><div class="ld-gutter"></div></div></details></section><section class="ld-file" id="f15" data-ld-path="variables.tf"><div class="ld-filenote"><p>New, and folded shut.</p>
-</div><details class="ld-fileblock"><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="infra">wren-terraform</span><code class="ld-path">variables.tf</code><span class="ld-badge ld-badge-add">added</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+3</span><span class="ld-stat ld-stat-del">−0</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody><tr class="ld-row ld-hunk" id="f15-r0"><td class="ld-no"></td><td class="ld-no"></td><td class="ld-text">&nbsp;</td></tr><tr class="ld-row ld-add" id="f15-r1"><td class="ld-no"></td><td class="ld-no">1</td><td class="ld-text"><span class="ld-sign">+</span>variable &quot;subnets&quot; { type = list(string) }</td></tr><tr class="ld-row ld-add" id="f15-r2"><td class="ld-no"></td><td class="ld-no">2</td><td class="ld-text"><span class="ld-sign">+</span>variable &quot;vpc_id&quot; { type = string }</td></tr><tr class="ld-row ld-add" id="f15-r3"><td class="ld-no"></td><td class="ld-no">3</td><td class="ld-text"><span class="ld-sign">+</span>variable &quot;github_oidc_provider_arn&quot; { type = string }</td></tr></tbody></table></div><div class="ld-gutter"></div></div></details></section>
+</div><details class="ld-fileblock" data-ld-lazy="f14"><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="infra">wren-terraform</span><code class="ld-path">maintenance-page.png</code><span class="ld-badge ld-badge-del">deleted</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+0</span><span class="ld-stat ld-stat-del">−0</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody></tbody></table></div><div class="ld-gutter"></div></div></details></section><section class="ld-file" id="f15" data-ld-path="variables.tf"><div class="ld-filenote"><p>New, and folded shut.</p>
+</div><details class="ld-fileblock" data-ld-lazy="f15"><summary class="ld-filehead"><span class="ld-chev" aria-hidden="true">▸</span><span class="ld-src" data-ld-src="infra">wren-terraform</span><code class="ld-path">variables.tf</code><span class="ld-badge ld-badge-add">added</span><span class="ld-spacer"></span><span class="ld-stat ld-stat-add">+3</span><span class="ld-stat ld-stat-del">−0</span></summary><div class="ld-body"><div class="ld-diffwrap"><table class="ld-diff"><tbody></tbody></table></div><div class="ld-gutter"></div></div></details></section><section class="ld-appendix" id="appendix"><h2 class="ld-appendix-title">Appendix: how it was decided</h2><div class="ld-appendix-meta">4 turns · March 2 – 3, 2026 · 2 threads · 3 sessions</div><ul class="ld-threads"><li class="ld-thread-row"><div class="ld-thread-head"><span class="ld-thread-name">Promoting an image instead of rebuilding it</span><span class="ld-thread-count">3 turns · 2 sessions</span></div><div class="ld-thread-note"><p>Two sessions, the second resumed after the first was compacted.</p>
+</div></li><li class="ld-thread-row"><div class="ld-thread-head"><span class="ld-thread-name">Checking what the registry charges for</span><span class="ld-thread-count">1 turns · 1 sessions</span></div><div class="ld-thread-note"><p>A separate session, opened to check one thing.</p>
+</div></li></ul><div class="ld-appendix-note"><p>Four turns of an invented conversation, interleaved by time across two
+sessions, to show what the section does: the part of each prompt and reply
+the decision turned on, with the rest one click away, and a band of counts
+where the work itself was.</p>
+</div><div class="ld-stream"><section class="ld-chapter ld-achapter" id="ac-mechanism"><h3 class="ld-chapter-title">Deciding to promote rather than rebuild</h3><div class="ld-chapter-note"><p>Chapters here are the subject, not the session: the stream is
+chronological, so a chapter is fixed by the turn it opens at.</p>
+</div></section><article class="ld-turn" id="q-promotion" data-ld-thread="promotion"><div class="ld-turn-head"><span class="ld-turn-time">Monday, March 2 4:14AM</span><a class="ld-turn-id" href="#q-promotion" data-ld-target="q-promotion">t0302-0914</a><span class="ld-turn-thread">Promoting an image instead of rebuilding it</span></div><div class="ld-msg ld-msg-prompt" id="q-promotion-prompt"><div class="ld-who">Prompt</div><div class="ld-msg-body"><p class="ld-ppara"><span class="ld-gap" aria-hidden="true">… </span><span class="ld-prow ld-pprose ld-elided" id="t0p-r0">Every deploy rebuilds from source on the prod branch, so what ships </span><span class="ld-prow ld-pprose ld-elided" id="t0p-r1">has never been tested. </span><span class="ld-prow ld-pprose" id="t0p-r2">How hard is it to test one image and then ship </span><span class="ld-gap" aria-hidden="true">… </span><span class="ld-prow ld-pprose ld-elided" id="t0p-r3">that same image? </span><span class="ld-prow ld-pprose ld-elided" id="t0p-r4">I don't want to invent a promotion service for it. </span></p><button type="button" class="ld-msg-more" aria-expanded="false">show all (5 lines)</button></div></div><div class="ld-work"><span class="ld-work-counts">4 min · 4.1k tokens · 16 tool calls (Bash ×12, Read ×4)</span><span class="ld-work-said">Reading the workflow and the registry configuration first.</span></div><div class="ld-msg ld-msg-reply" id="q-promotion-reply"><div class="ld-who">Reply</div><div class="ld-msg-body"><p class="ld-ppara"><span class="ld-gap" aria-hidden="true">… </span><span class="ld-prow ld-pprose ld-elided" id="t0q-r0">Not hard, and no service is needed. </span><span class="ld-prow ld-pprose" id="t0q-r1">Promotion is a tag, not a copy: </span><span class="ld-gap" aria-hidden="true">… </span><span class="ld-prow ld-pprose ld-elided" id="t0q-r2">the registry already stores the image by digest, so &quot;promote&quot; means </span><span class="ld-prow ld-pprose ld-elided" id="t0q-r3">adding a second tag to a digest that is already there. </span></p><p class="ld-ppara"><span class="ld-prow ld-pprose" id="t0q-r5">The work is in the two things that make that safe. </span><span class="ld-prow ld-pprose" id="t0q-r6">Tags have to be </span><span class="ld-prow ld-pprose" id="t0q-r7">immutable, or a commit tag can be moved under you between test and </span><span class="ld-prow ld-pprose" id="t0q-r8">deploy. </span><span class="ld-prow ld-pprose" id="t0q-r9">And the lifecycle policy has to expire deployed images more </span><span class="ld-prow ld-pprose" id="t0q-r10">slowly than candidates, or the thing you want to roll back to is </span><span class="ld-prow ld-pprose" id="t0q-r11">collected before you need it. </span></p><button type="button" class="ld-msg-more" aria-expanded="false">show all (12 lines)</button></div></div></article><article class="ld-turn" id="q-oidc" data-ld-thread="promotion"><div class="ld-turn-head"><span class="ld-turn-time">Monday, March 2 5:42AM</span><a class="ld-turn-id" href="#q-oidc" data-ld-target="q-oidc">t0302-1042</a></div><div class="ld-turn-note"><p>Asked as an aside, and answered in the same batch.</p>
+</div><div class="ld-msg ld-msg-prompt" id="q-oidc-prompt"><div class="ld-who">Prompt</div><div class="ld-msg-body"><p class="ld-ppara"><span class="ld-prow ld-pprose" id="t1p-r0">Do it, and while you're in there the workflow has AWS keys in it. </span><span class="ld-gap" aria-hidden="true">… </span><span class="ld-prow ld-pprose ld-elided" id="t1p-r1">Can those go? </span></p><button type="button" class="ld-msg-more" aria-expanded="false">show all (2 lines)</button></div></div><div class="ld-work"><span class="ld-work-counts">7 min · 8.8k tokens · 31 tool calls (Bash ×22, Edit ×9)</span><span class="ld-work-att">attached deploy.yml</span></div><div class="ld-msg ld-msg-reply" id="q-oidc-reply"><div class="ld-who">Reply</div><div class="ld-msg-body"><p class="ld-ppara"><span class="ld-gap" aria-hidden="true">… </span><span class="ld-prow ld-pprose ld-elided" id="t1q-r0">Gone. </span><span class="ld-prow ld-pprose ld-elided" id="t1q-r1">The job now assumes a role through the GitHub OIDC provider, </span><span class="ld-prow ld-pprose" id="t1q-r2">and the trust policy names one environment rather than every ref in </span><span class="ld-gap" aria-hidden="true">… </span><span class="ld-prow ld-pprose ld-elided" id="t1q-r3">the repository, so a workflow on a pushed branch cannot assume it. </span></p><button type="button" class="ld-msg-more" aria-expanded="false">show all (4 lines)</button></div></div></article><section class="ld-chapter ld-achapter" id="ac-runtime"><h3 class="ld-chapter-title">One image for every tier</h3></section><article class="ld-turn" id="turn-aside-t0303-0900" data-ld-thread="aside"><div class="ld-turn-head"><span class="ld-turn-time">Tuesday, March 3 4:00AM</span><a class="ld-turn-id" href="#turn-aside-t0303-0900" data-ld-target="turn-aside-t0303-0900">t0303-0900</a><span class="ld-turn-thread">Checking what the registry charges for</span></div><div class="ld-msg ld-msg-prompt" id="turn-aside-t0303-0900-prompt"><div class="ld-who">Prompt</div><div class="ld-msg-body"><p class="ld-ppara"><span class="ld-prow ld-pprose" id="t2p-r0">Separate question, asked here so it doesn't drag the other session </span><span class="ld-prow ld-pprose" id="t2p-r1">around: if we keep every commit's image, what does that cost? </span></p></div></div><div class="ld-work"><span class="ld-work-counts">1 min · 1.2k tokens · 4 tool calls (Bash ×4)</span></div><div class="ld-msg ld-msg-reply" id="turn-aside-t0303-0900-reply"><div class="ld-who">Reply</div><div class="ld-msg-body"><p class="ld-ppara"><span class="ld-prow ld-pprose" id="t2q-r0">Not much, and the lifecycle policy is the lever. </span></p><div class="ld-ptablewrap"><table class="ld-ptableblock"><tbody><tr class="ld-prow ld-ptable" id="t2q-r2"><td>population</td><td>rule</td><td>kept</td></tr><tr class="ld-prow ld-ptable" id="t2q-r4"><td>candidates</td><td><code>sha-</code> prefix</td><td>30</td></tr><tr class="ld-prow ld-ptable" id="t2q-r5"><td>deployed</td><td><code>staging-</code>, <code>prod-</code></td><td>100</td></tr></tbody></table></div><p class="ld-ppara"><span class="ld-prow ld-pprose" id="t2q-r7">At h2o's image size that is roughly <strong>$2.50 a month</strong>, which is </span><span class="ld-prow ld-pprose" id="t2q-r8">below the noise floor of the account. </span><span class="ld-prow ld-pprose" id="t2q-r9">The reason to expire anything </span><span class="ld-prow ld-pprose" id="t2q-r10">is not cost; it is that an unbounded repository makes <code>describe-images</code> </span><span class="ld-prow ld-pprose" id="t2q-r11">slow enough to time out in the deploy. </span></p></div></div></article><article class="ld-turn" id="q-settings" data-ld-thread="promotion"><div class="ld-turn-head"><span class="ld-turn-time">Tuesday, March 3 10:30AM</span><a class="ld-turn-id" href="#q-settings" data-ld-target="q-settings">t0303-1530</a><span class="ld-turn-thread">Promoting an image instead of rebuilding it</span></div><div class="ld-msg ld-msg-prompt" id="q-settings-prompt"><div class="ld-who">Prompt</div><div class="ld-msg-body"><p class="ld-ppara"><span class="ld-gap" aria-hidden="true">… </span><span class="ld-prow ld-pprose ld-elided" id="t3p-r0">One more: the settings module is copied in at build time, which is </span><span class="ld-prow ld-pprose ld-elided" id="t3p-r1">why there are two Dockerfiles. </span><span class="ld-prow ld-pprose" id="t3p-r2">Can the image choose at runtime? </span></p><button type="button" class="ld-msg-more" aria-expanded="false">show all (3 lines)</button></div></div><div class="ld-work"><span class="ld-work-counts">2 min · 2.2k tokens · 9 tool calls (Bash ×6, Edit ×3)</span></div><div class="ld-msg ld-msg-reply" id="q-settings-reply"><div class="ld-who">Reply</div><div class="ld-msg-body"><p class="ld-ppara"><span class="ld-prow ld-pprose" id="t3q-r0">Yes, and it removes the second Dockerfile. </span><span class="ld-gap" aria-hidden="true">… </span><span class="ld-prow ld-pprose ld-elided" id="t3q-r1">The module is selected </span><span class="ld-prow ld-pprose ld-elided" id="t3q-r2">from an environment variable at startup, so one image runs in every </span><span class="ld-prow ld-pprose ld-elided" id="t3q-r3">tier and the <code>test</code> stage can be built from <code>prod</code>. </span></p><button type="button" class="ld-msg-more" aria-expanded="false">show all (4 lines)</button></div></div></article></div></section>
   <footer class="ld-footer">Generated by literate-diff.</footer>
 </main>
 </div>
-<script>window.LD_ANCHORS = {"f0": {"file": 0, "start": 0, "end": 38}, "file-infra-ecr.tf": {"file": 0, "start": 0, "end": 38}, "retention-split": {"file": 0, "start": 13, "end": 13}, "f0n0": {"file": 0, "start": 6, "end": 10}, "f0n1": {"file": 0, "start": 27, "end": 27}, "f0n2": {"file": 0, "start": 19, "end": 19}, "f1": {"file": 1, "start": 0, "end": 9}, "file-infra-iam.tf": {"file": 1, "start": 0, "end": 9}, "f1n0": {"file": 1, "start": 6, "end": 6}, "old-subject": {"file": 1, "start": 4, "end": 4}, "f2": {"file": 2, "start": 0, "end": 22}, "file-app-Dockerfile": {"file": 2, "start": 0, "end": 22}, "stage-prod": {"file": 2, "start": 10, "end": 10}, "stage-test": {"file": 2, "start": 17, "end": 17}, "f2s2": {"file": 2, "start": 21, "end": 21}, "bake-settings": {"file": 2, "start": 12, "end": 12}, "f2n1": {"file": 2, "start": 13, "end": 13}, "f3": {"file": 3, "start": 0, "end": 6}, "file-app-app-__init__.py": {"file": 3, "start": 0, "end": 6}, "f3n0": {"file": 3, "start": 5, "end": 5}, "f4": {"file": 4, "start": 0, "end": 3}, "file-app-app-settings.py": {"file": 4, "start": 0, "end": 3}, "f5": {"file": 5, "start": 0, "end": 4}, "file-app-app-settings_prod.py": {"file": 5, "start": 0, "end": 4}, "f5n0": {"file": 5, "start": 4, "end": 4}, "f6": {"file": 6, "start": 0, "end": 35}, "file-app-.github-workflows-deploy.yml": {"file": 6, "start": 0, "end": 35}, "resolve": {"file": 6, "start": 22, "end": 22}, "f6n0": {"file": 6, "start": 11, "end": 12}, "f6n1": {"file": 6, "start": 13, "end": 13}, "f6n2": {"file": 6, "start": 17, "end": 17}, "f6n3": {"file": 6, "start": 26, "end": 27}, "f7": {"file": 7, "start": 0, "end": 11}, "file-infra-ingress.tf": {"file": 7, "start": 0, "end": 11}, "f7n0": {"file": 7, "start": 6, "end": 7}, "f7n1": {"file": 7, "start": 10, "end": 10}, "f8": {"file": 8, "start": 0, "end": 14}, "file-infra-maintenance.tf": {"file": 8, "start": 0, "end": 14}, "f8n0": {"file": 8, "start": 0, "end": 0}, "f9": {"file": 9, "start": 0, "end": 2}, "file-app-NOTES": {"file": 9, "start": 0, "end": 2}, "f10": {"file": 10, "start": 0, "end": 8}, "file-app-README.md": {"file": 10, "start": 0, "end": 8}, "f10n0": {"file": 10, "start": 7, "end": 7}, "f11": {"file": 11, "start": 0, "end": 1}, "file-app-dist-bundle.js": {"file": 11, "start": 0, "end": 1}, "f12": {"file": 12, "start": 0, "end": 8}, "file-app-requirements.lock": {"file": 12, "start": 0, "end": 8}, "f13": {"file": 13, "start": 0, "end": 3}, "file-app-requirements.txt": {"file": 13, "start": 0, "end": 3}, "f14": {"file": 14, "start": 0, "end": 0}, "file-infra-maintenance-page.png": {"file": 14, "start": 0, "end": 0}, "f15": {"file": 15, "start": 0, "end": 3}, "file-infra-variables.tf": {"file": 15, "start": 0, "end": 3}, "registry": {"file": 0, "start": 0, "end": 38}, "image": {"file": 2, "start": 0, "end": 22}, "deploy": {"file": 6, "start": 0, "end": 35}, "c3": {"file": 9, "start": 0, "end": 2}};</script>
+<script>window.LD_ANCHORS = {"f0": {"body": "f0", "start": 0, "end": 38}, "file-infra-ecr.tf": {"body": "f0", "start": 0, "end": 38}, "retention-split": {"body": "f0", "start": 13, "end": 13}, "f0n0": {"body": "f0", "start": 6, "end": 10}, "f0n1": {"body": "f0", "start": 27, "end": 27}, "f0n2": {"body": "f0", "start": 19, "end": 19}, "f1": {"body": "f1", "start": 0, "end": 9}, "file-infra-iam.tf": {"body": "f1", "start": 0, "end": 9}, "f1n0": {"body": "f1", "start": 6, "end": 6}, "old-subject": {"body": "f1", "start": 4, "end": 4}, "f2": {"body": "f2", "start": 0, "end": 22}, "file-app-Dockerfile": {"body": "f2", "start": 0, "end": 22}, "stage-prod": {"body": "f2", "start": 10, "end": 10}, "stage-test": {"body": "f2", "start": 17, "end": 17}, "f2s2": {"body": "f2", "start": 21, "end": 21}, "bake-settings": {"body": "f2", "start": 12, "end": 12}, "f2n1": {"body": "f2", "start": 13, "end": 13}, "f3": {"body": "f3", "start": 0, "end": 6}, "file-app-app-__init__.py": {"body": "f3", "start": 0, "end": 6}, "f3n0": {"body": "f3", "start": 5, "end": 5}, "f4": {"body": "f4", "start": 0, "end": 3}, "file-app-app-settings.py": {"body": "f4", "start": 0, "end": 3}, "f5": {"body": "f5", "start": 0, "end": 4}, "file-app-app-settings_prod.py": {"body": "f5", "start": 0, "end": 4}, "f5n0": {"body": "f5", "start": 4, "end": 4}, "f6": {"body": "f6", "start": 0, "end": 35}, "file-app-.github-workflows-deploy.yml": {"body": "f6", "start": 0, "end": 35}, "resolve": {"body": "f6", "start": 22, "end": 22}, "f6n0": {"body": "f6", "start": 11, "end": 12}, "f6n1": {"body": "f6", "start": 13, "end": 13}, "f6n2": {"body": "f6", "start": 17, "end": 17}, "f6n3": {"body": "f6", "start": 26, "end": 27}, "f7": {"body": "f7", "start": 0, "end": 11}, "file-infra-ingress.tf": {"body": "f7", "start": 0, "end": 11}, "f7n0": {"body": "f7", "start": 6, "end": 7}, "f7n1": {"body": "f7", "start": 10, "end": 10}, "f8": {"body": "f8", "start": 0, "end": 14}, "file-infra-maintenance.tf": {"body": "f8", "start": 0, "end": 14}, "f8n0": {"body": "f8", "start": 0, "end": 0}, "f9": {"body": "f9", "start": 0, "end": 2}, "file-app-NOTES": {"body": "f9", "start": 0, "end": 2}, "f10": {"body": "f10", "start": 0, "end": 8}, "file-app-README.md": {"body": "f10", "start": 0, "end": 8}, "f10n0": {"body": "f10", "start": 7, "end": 7}, "f11": {"body": "f11", "start": 0, "end": 1}, "file-app-dist-bundle.js": {"body": "f11", "start": 0, "end": 1}, "f12": {"body": "f12", "start": 0, "end": 8}, "file-app-requirements.lock": {"body": "f12", "start": 0, "end": 8}, "f13": {"body": "f13", "start": 0, "end": 3}, "file-app-requirements.txt": {"body": "f13", "start": 0, "end": 3}, "f14": {"body": "f14", "start": 0, "end": 0}, "file-infra-maintenance-page.png": {"body": "f14", "start": 0, "end": 0}, "f15": {"body": "f15", "start": 0, "end": 3}, "file-infra-variables.tf": {"body": "f15", "start": 0, "end": 3}, "registry": {"body": "f0", "start": 0, "end": 38}, "image": {"body": "f2", "start": 0, "end": 22}, "deploy": {"body": "f6", "start": 0, "end": 35}, "c3": {"body": "f9", "start": 0, "end": 2}, "q-promotion": {"body": "t0p", "start": 0, "end": 4}, "q-promotion-prompt": {"body": "t0p", "start": 2, "end": 2}, "q-promotion-response": {"body": "t0q", "start": 1, "end": 1}, "q-promotion-response2": {"body": "t0q", "start": 5, "end": 11}, "p-promotion": {"body": "t0q", "start": 1, "end": 1}, "q-oidc": {"body": "t1p", "start": 0, "end": 1}, "q-oidc-prompt": {"body": "t1p", "start": 0, "end": 0}, "q-oidc-response": {"body": "t1q", "start": 2, "end": 2}, "q-settings": {"body": "t3p", "start": 0, "end": 2}, "q-settings-prompt": {"body": "t3p", "start": 2, "end": 2}, "q-settings-response": {"body": "t3q", "start": 0, "end": 0}, "q-settings-why": {"body": "t3q", "start": 3, "end": 3}, "turn-aside-t0303-0900": {"body": "t2p", "start": 0, "end": 1}, "turn-aside-t0303-0900-prompt": {"body": "t2p", "start": 0, "end": 1}, "turn-aside-t0303-0900-response": {"body": "t2q", "start": 0, "end": 11}};
+window.LD_ROWS = {"f9":{"rows":[["h",0,0,"",""],["a",0,1,"no newline at the end",""],["m",0,0,"No newline at end of file",""]],"sections":{}},"f12":{"rows":[["h",0,0,"",""],["d",1,0,"certifi==2024.2.2",""],["a",0,1,"blinker==1.8.2",""],["a",0,2,"certifi==2024.7.4",""],["c",2,3,"click==8.1.7",""],["d",3,0,"flask==3.0.0",""],["a",0,4,"flask==3.0.1",""],["c",4,5,"gunicorn==22.0.0",""],["a",0,6,"itsdangerous==2.2.0",""]],"sections":{}},"f14":{"rows":[["m",0,0,"Binary file not shown",""]],"sections":{}},"f15":{"rows":[["h",0,0,"",""],["a",0,1,"variable \"subnets\" { type = list(string) }",""],["a",0,2,"variable \"vpc_id\" { type = string }",""],["a",0,3,"variable \"github_oidc_provider_arn\" { type = string }",""]],"sections":{}}};</script>
 <script>(function () {
   "use strict";
 
   var ANCHORS = window.LD_ANCHORS || {};
+  var ROWS = window.LD_ROWS || {};
   var NARROW = window.matchMedia("(max-width: 62rem)");
+
+  /* --- files that arrive as rows rather than markup ------------------------ */
+
+  var KINDS = { c: "context", a: "add", d: "del", h: "hunk", m: "message" };
+  var SIGNS = { add: "+", del: "-" };
+
+  function cell(cls, text) {
+    var td = document.createElement("td");
+    td.className = cls;
+    if (text) td.textContent = text;
+    return td;
+  }
+
+  // A collapsed file ships as data: 145 bytes of table scaffolding per line is
+  // not worth spending on something folded shut. Build it the first time it is
+  // opened, or the first time a reference points into it.
+  function fill(block) {
+    var key = block.dataset.ldLazy;
+    if (!key) return false;
+    var data = ROWS[key];
+    delete block.dataset.ldLazy;
+    if (!data) return false;
+
+    var body = block.querySelector("table.ld-diff tbody");
+    if (!body) return false;
+    var html = [];
+    data.rows.forEach(function (r, i) {
+      var section = data.sections[i];
+      if (section) html.push(section);
+      var kind = KINDS[r[0]] || "context";
+      var tr = document.createElement("tr");
+      tr.id = key + "-r" + i;
+      tr.className = "ld-row ld-" + kind + (r[4] ? " ld-marked" : "");
+      if (r[4]) tr.dataset.ldNotes = r[4];
+      if (kind === "hunk" || kind === "message") {
+        tr.appendChild(cell("ld-no", ""));
+        tr.appendChild(cell("ld-no", ""));
+        tr.appendChild(cell("ld-text", r[3]));
+      } else {
+        tr.appendChild(cell("ld-no", r[1] ? String(r[1]) : ""));
+        tr.appendChild(cell("ld-no", r[2] ? String(r[2]) : ""));
+        var td = cell("ld-text", "");
+        var sign = document.createElement("span");
+        sign.className = "ld-sign";
+        sign.textContent = SIGNS[kind] || " ";
+        td.appendChild(sign);
+        td.appendChild(document.createTextNode(r[3]));
+        tr.appendChild(td);
+      }
+      html.push(tr.outerHTML);
+    });
+    body.innerHTML = html.join("");
+    return true;
+  }
+
+  function fillFor(id) {
+    // `id` may name a row inside a file that has not been built yet.
+    var key = /^(f\d+)/.exec(id);
+    if (!key) return;
+    var block = document.querySelector('[data-ld-lazy="' + key[1] + '"]');
+    if (block) fill(block);
+  }
 
   function rowIndex(note) {
     var m = /-r(\d+)$/.exec(note.dataset.ldRow || "");
@@ -697,9 +1030,10 @@ sentence that no longer holds.</p>
   function rowsFor(targetId) {
     var a = ANCHORS[targetId];
     if (!a) return [];
+    fillFor(a.body);
     var out = [];
     for (var i = a.start; i <= a.end; i++) {
-      var el = document.getElementById("f" + a.file + "-r" + i);
+      var el = document.getElementById(a.body + "-r" + i);
       if (el) out.push(el);
     }
     return out;
@@ -781,6 +1115,7 @@ sentence that no longer holds.</p>
   /* --- navigation ---------------------------------------------------------- */
 
   function reveal(targetId) {
+    fillFor(targetId);
     var rows = rowsFor(targetId);
     var el = document.getElementById(targetId);
     var focus = rows[0] || el;
@@ -791,12 +1126,20 @@ sentence that no longer holds.</p>
       block.open = true;
       placeNotes();
     }
-    focus.scrollIntoView({ behavior: "smooth", block: "center" });
+    var msg = focus.closest(".ld-msg");
+    if (msg && focus.classList.contains("ld-elided")) openMessage(msg, true);
+    // Centre a line, but put the top of anything taller than the window at the
+    // top: centring a section that is longer than the viewport lands the reader
+    // in the middle of it, which is nowhere in particular.
+    var tall = focus.getBoundingClientRect().height > window.innerHeight * 0.8;
+    focus.scrollIntoView({ block: tall ? "start" : "center" });
 
     document.querySelectorAll(".ld-flash").forEach(function (n) {
       n.classList.remove("ld-flash");
     });
-    var flash = rows.length ? rows : el ? [el] : [];
+    // Flashing something taller than the window tints the whole screen, which
+    // points at nothing. Landing at its top is the cue.
+    var flash = rows.length ? rows : el && !tall ? [el] : [];
     flash.forEach(function (n) {
       n.classList.remove("ld-flash");
       void n.offsetWidth;
@@ -810,7 +1153,27 @@ sentence that no longer holds.</p>
     }
   }
 
+  function openMessage(msg, open) {
+    msg.classList.toggle("is-open", open);
+    var btn = msg.querySelector(".ld-msg-more");
+    if (btn) {
+      btn.setAttribute("aria-expanded", String(open));
+      btn.textContent = open ? "show less" : btn.dataset.ldLabel;
+    }
+  }
+
+  document.querySelectorAll(".ld-msg-more").forEach(function (btn) {
+    btn.dataset.ldLabel = btn.textContent;
+  });
+
   document.addEventListener("click", function (ev) {
+    var more = ev.target.closest(".ld-msg-more");
+    if (more) {
+      ev.preventDefault();
+      var msg = more.closest(".ld-msg");
+      openMessage(msg, !msg.classList.contains("is-open"));
+      return;
+    }
     var jump = ev.target.closest("[data-ld-target]");
     if (jump && !jump.classList.contains("ld-quote-btn")) {
       ev.preventDefault();
@@ -833,6 +1196,7 @@ sentence that no longer holds.</p>
 
   document.addEventListener("toggle", function (ev) {
     if (ev.target.classList && ev.target.classList.contains("ld-fileblock")) {
+      if (ev.target.open) fill(ev.target);
       schedulePlace();
     }
   }, true);
@@ -907,7 +1271,7 @@ sentence that no longer holds.</p>
   /* --- table of contents current-file tracking ------------------------------ */
 
   function trackToc() {
-    var files = document.querySelectorAll(".ld-file");
+    var files = document.querySelectorAll(".ld-file, .ld-thread");
     if (!files.length || !("IntersectionObserver" in window)) return;
     var links = {};
     document.querySelectorAll(".ld-toc-file > a").forEach(function (a) {

@@ -27,3 +27,21 @@ def test_feature_tour_builds_cleanly(tmp_path, capsys, monkeypatch):
     # Renames, binary files and the missing-newline marker render.
     assert "ld-badge-ren" in body
     assert "Binary file not shown" in body
+    # The conversation appendix: turns, a folded message, a work band, and a
+    # quote of a prompt from inside the narrative.
+    assert body.count('<article class="ld-turn"') == 4
+    assert "ld-quote-said" in body
+    assert "ld-elided" in body
+    assert "tool calls" in body
+    # Two sessions interleaved by time, cut into subject chapters, with
+    # markdown rendered inside the messages.
+    assert body.index('id="t1p-r0"') < body.index('id="t2p-r0"')
+    assert body.count("ld-turn-thread") == 3
+    assert body.count('class="ld-chapter ld-achapter"') == 2
+    assert '<table class="ld-ptableblock"' in body
+    # A "How it happened" section: quotes shown in place, and bare citations.
+    assert "How it happened" in body
+    assert "ld-quote-open" in body and "ld-cite" in body
+    # The two summary sections, in the order the skill puts them.
+    assert body.index("What changed") < body.index("What to take from this")
+    assert body.index("What to take from this") < body.index("The story")

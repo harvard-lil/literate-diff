@@ -5,9 +5,11 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from .annotate import AnnotationError, build_document, load_annotations
+from .collect import collect, local_zone, to_yaml
 from .parse import parse_diff
 from .render import render_document
 
@@ -115,6 +117,10 @@ def collect_sources(args, spec: dict) -> tuple[list, dict]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "collect":
+        return collect_main(argv[1:])
+
     p = argparse.ArgumentParser(
         prog="literate-diff",
         description="Turn a git diff plus a YAML annotation sidecar into a "
@@ -148,6 +154,11 @@ def main(argv: list[str] | None = None) -> int:
         help="print a starter annotation YAML for this diff instead of HTML",
     )
     p.add_argument("--title", help="override the document title")
+    p.add_argument(
+        "--transcript",
+        help="collected conversation YAML for the appendix (overrides the "
+        "sidecar's `transcript:`)",
+    )
 
     args = p.parse_args(argv)
 
@@ -163,6 +174,17 @@ def main(argv: list[str] | None = None) -> int:
     files, meta = collect_sources(args, spec)
     if not files:
         raise SystemExit("no files found in the diff")
+
+    # A `transcript:` in the sidecar is relative to the sidecar, which is where
+    # the collected file sits; one on the command line is relative to the cwd.
+    transcript = args.transcript
+    if not transcript and spec.get("transcript"):
+        base = Path(args.annotations).parent if args.annotations else Path(".")
+        transcript = str(base / spec["transcript"])
+    if transcript:
+        if not Path(transcript).is_file():
+            raise SystemExit(f"transcript not found: {transcript}")
+        meta["transcript"] = transcript
 
     if args.outline:
         print(make_outline(files, meta))
@@ -181,8 +203,79 @@ def main(argv: list[str] | None = None) -> int:
     for w in doc.warnings:
         print(f"warning: {w}", file=sys.stderr)
     kb = len(html.encode("utf-8")) / 1024
+    turns = sum(len(t.turns) for t in doc.threads)
+    convo = f", {turns} turns in {len(doc.threads)} threads" if turns else ""
     print(
-        f"wrote {args.out} — {len(doc.files)} files, {kb:,.0f} KB",
+        f"wrote {args.out} — {len(doc.files)} files{convo}, {kb:,.0f} KB",
+        file=sys.stderr,
+    )
+    return 0
+
+
+def collect_main(argv: list[str]) -> int:
+    p = argparse.ArgumentParser(
+        prog="literate-diff collect",
+        description="Collect local agent sessions into a transcript file. "
+        "Read the result before sharing it: it quotes whatever was on screen.",
+    )
+    p.add_argument("--repo", default=".", help="project whose sessions to read")
+    p.add_argument(
+        "--title",
+        action="append",
+        dest="titles",
+        help="only sessions whose title contains this; repeatable",
+    )
+    p.add_argument(
+        "--session", action="append", dest="sessions", help="session id (or prefix)"
+    )
+    p.add_argument("--since", default="", help="drop turns before this ISO date")
+    p.add_argument(
+        "--merge-by-title",
+        action="store_true",
+        help="sessions sharing a title become one thread, in timestamp order",
+    )
+    p.add_argument("--home", default=str(Path.home()), help="home directory to read")
+    p.add_argument(
+        "--timezone",
+        help="clock to show times on and derive turn ids from "
+        "(default: this machine's). Logs are stamped UTC.",
+    )
+    p.add_argument("-o", "--out", required=True, help="transcript YAML to write")
+    args = p.parse_args(argv)
+
+    warnings: list[str] = []
+    zone = args.timezone or local_zone()
+    threads = collect(
+        repo=args.repo,
+        zone=zone,
+        home=Path(args.home),
+        titles=args.titles,
+        sessions=args.sessions,
+        since=args.since,
+        merge_by_title=args.merge_by_title,
+        warnings=warnings,
+    )
+    if not threads:
+        raise SystemExit("no sessions matched")
+
+    text = to_yaml(
+        threads,
+        {
+            "collected": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "timezone": zone,
+        },
+    )
+    out = Path(args.out)
+    if out.parent != Path(""):
+        out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text, encoding="utf-8")
+
+    for w in warnings:
+        print(f"warning: {w}", file=sys.stderr)
+    turns = sum(len(t.turns) for t in threads)
+    kb = len(text.encode("utf-8")) / 1024
+    print(
+        f"wrote {args.out} — {len(threads)} threads, {turns} turns, {kb:,.0f} KB",
         file=sys.stderr,
     )
     return 0

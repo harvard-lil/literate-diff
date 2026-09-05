@@ -37,6 +37,34 @@ categories:
 
 # --- Plot --------------------------------------------------------------------
 plot: |
+  ## What changed
+
+  * **The suite runs against the bytes that ship.** CI used to build one image
+    to test and the deploy built another from the same source; now it builds
+    one, tests the `test` stage on top of it, and the deploy ships the image
+    that passed.
+  * **A deploy is a tag, not a build**, so it takes seconds rather than
+    minutes and cannot produce something the suite has not seen.
+  * **No AWS keys in the workflow.** The job assumes a role through GitHub's
+    OIDC provider, and the trust policy names one environment rather than
+    every branch in the repository.
+
+  ## What to take from this
+
+  **If you are setting up a deploy elsewhere.** Promotion needs no service:
+  the registry stores an image by digest, so shipping a tested image means
+  adding a tag to a digest that is already there [](ld:#q-promotion). Two
+  registry settings make it safe -- immutable tags, and a lifecycle policy
+  that expires deployed images more slowly than candidates. Drop the habit of
+  copying a settings module in at build time; choose it at runtime and the
+  second Dockerfile goes away [](ld:#q-settings).
+
+  **If you review our AWS configuration.** A deploy role whose trust policy
+  names a branch can be assumed from any pushed branch. Name the environment
+  instead [](ldc:#oidc).
+
+  ## The story
+
   Before this change, every deploy built a fresh image on the `prod` branch
   and pushed it as `latest`, with production settings copied into the image
   at build time and long-lived AWS keys in the workflow. The suite never ran
@@ -47,6 +75,32 @@ plot: |
   resolves that tag to a digest and ships the digest. The registry refuses to
   move a commit tag, keeps deployed images longer than candidates, and the
   deploy role trusts one GitHub environment rather than every branch.
+
+  The change was [asked for as a question about testing what
+  ships](ldq:#q-promotion-prompt), and the two properties that make promotion
+  safe [came back with the answer](ld:#q-promotion-response). The appendix at
+  the end has the exchange.
+
+  ## How it happened
+
+  The order the decisions arrived in, which is not the order they are
+  presented in above. Each entry cites the exchange it came from; the whole
+  record is in the appendix.
+
+  **1. Testing what ships** (Monday). Every deploy rebuilt from source on the
+  `prod` branch, so what shipped had never been tested. The answer was that
+  no promotion service was needed, because the registry already stores an
+  image by digest: [](ldq:#p-promotion) *The work moved from building a
+  mechanism to making two registry properties safe.*
+
+  **2. The keys, asked as an aside** (Monday). Noticed in passing rather than
+  planned [](ld:#q-oidc), and answered in the same batch. *Long-lived AWS
+  keys left the workflow.*
+
+  **3. One image for every tier** (Tuesday). The settings module was copied
+  in at build time, which is why there were two Dockerfiles
+  [](ld:#q-settings). *Choosing at runtime removed the second file and let
+  `test` be built from `prod`.*
 
   The chapters run in dependency order: the registry has to accept immutable
   tags before the workflow can rely on them.
@@ -117,7 +171,8 @@ chapters:
     note: |
       Promotion by digest is only safe if tags cannot move, and only useful
       if the promoted image survives. Both are properties of the registry, so
-      they come first.
+      they come first. The long-lived keys went in the [same
+      sweep](ld:#q-oidc).
     files:
       - infra:ecr.tf
       - infra:iam.tf
@@ -366,3 +421,63 @@ files:
   infra:variables.tf:
     note: |
       New, and folded shut.
+
+# --- the appendix ------------------------------------------------------------
+# Collected separately: session logs are local and eventually deleted, so the
+# transcript is a source artifact beside the patches, not something a build
+# regenerates. Trim and redact it by hand before sharing.
+transcript: conversations.yaml
+
+appendix:
+  title: "Appendix: how it was decided"
+  note: |
+    Four turns of an invented conversation, interleaved by time across two
+    sessions, to show what the section does: the part of each prompt and reply
+    the decision turned on, with the rest one click away, and a band of counts
+    where the work itself was.
+
+  chapters:
+    - id: mechanism
+      at: promotion:t0302-0914
+      title: "Deciding to promote rather than rebuild"
+      note: |
+        Chapters here are the subject, not the session: the stream is
+        chronological, so a chapter is fixed by the turn it opens at.
+
+    - id: runtime
+      at: aside:t0303-0900
+      title: "One image for every tier"
+
+threads:
+  promotion:
+    note: |
+      Two sessions, the second resumed after the first was compacted.
+  aside:
+    note: |
+      A separate session, opened to check one thing.
+
+turns:
+  promotion:t0302-0914:
+    id: q-promotion
+    prompt: {at: "How hard is it to test one image"}
+    # A highlight may be several passages: one decision often turns on two
+    # parts of a reply that are pages apart.
+    response:
+      - {at: "Promotion is a tag, not a copy"}
+      - {at: "The work is in the two things", through: "before you need it"}
+    anchors:
+      - {id: p-promotion, at: "Promotion is a tag, not a copy", in: response}
+
+  promotion:t0302-1042:
+    id: q-oidc
+    note: |
+      Asked as an aside, and answered in the same batch.
+    prompt: {at: "the workflow has AWS keys"}
+    response: {at: "the trust policy names one environment"}
+
+  promotion:t0303-1530:
+    id: q-settings
+    prompt: {at: "Can the image choose at runtime?"}
+    response: {at: "it removes the second Dockerfile"}
+    anchors:
+      - {id: q-settings-why, at: "the `test` stage can be built from `prod`", in: response}

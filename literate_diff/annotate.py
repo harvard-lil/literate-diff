@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 import yaml
 
 from .parse import FileDiff, Line
+from .transcript import Row, Thread, Turn, TurnBody, load_transcript
 
 
 class AnnotationError(Exception):
@@ -17,9 +18,9 @@ class AnnotationError(Exception):
 
 @dataclass
 class Anchor:
-    """A resolved range of diff rows within one file."""
+    """A resolved row range within one body -- a file's diff, or a message."""
 
-    file: FileDiff
+    file: FileDiff | TurnBody
     start: int  # index into file.lines
     end: int  # inclusive
     anchor_id: str
@@ -38,6 +39,17 @@ class SideNote:
     text_md: str
     anchor: Anchor
     anchor_id: str
+
+
+@dataclass
+class AppendixChapter:
+    """A titled run of the conversation. The stream is chronological, so a
+    chapter is fixed by the turn it opens at."""
+
+    title: str
+    note_md: str
+    anchor_id: str
+    start: int  # index into Document.turns
 
 
 @dataclass
@@ -73,6 +85,14 @@ class Document:
     warnings: list[str] = field(default_factory=list)
     # name -> {label, color, short}; see `categories:` in the README.
     categories: dict[str, dict] = field(default_factory=dict)
+    # The appendix: conversations collected separately, cited from the diff.
+    threads: list[Thread] = field(default_factory=list)
+    # Every thread's turns in one chronological stream. A side conversation
+    # opened to think something through belongs where it happened, not in a
+    # section of its own.
+    turns: list[Turn] = field(default_factory=list)
+    appendix_chapters: list[AppendixChapter] = field(default_factory=list)
+    appendix: dict = field(default_factory=dict)
 
 
 _slug_bad = re.compile(r"[^a-zA-Z0-9._-]+")
@@ -265,7 +285,7 @@ def _find_row(
     hits = [
         i
         for i, line in enumerate(rows[from_index:], start=from_index)
-        if line.kind in ("add", "del", "context", "hunk") and test(line.text)
+        if line.kind != "message" and test(line.text)
     ]
     if len(hits) >= nth:
         # An anchor that matches more than once is only pinned by accident: a
@@ -275,10 +295,11 @@ def _find_row(
         # `nth: 1` is the default restated, not evidence the author counted the
         # matches; only nth >= 2 shows a deliberate choice among them.
         if len(hits) > 1 and nth == 1:
+            where = rows[hits[0]].new_no or rows[hits[0]].old_no
+            place = f"line {where}" if where else f"row {hits[0]}"
             warnings.append(
                 f"{file.key}: {at!r} matches {len(hits)} rows; using the first "
-                f"(line {rows[hits[0]].new_no or rows[hits[0]].old_no}). "
-                "Narrow the pattern or set `nth` to pin it."
+                f"({place}). Narrow the pattern or set `nth` to pin it."
             )
         return hits[nth - 1]
 
@@ -328,6 +349,137 @@ def normalize_categories(raw, warnings: list[str]) -> dict[str, dict]:
 
 
 # --- assembly ----------------------------------------------------------------
+
+
+def attach_threads(
+    threads: list[Thread],
+    spec: dict,
+    anchors: dict[str, Anchor],
+    warnings: list[str],
+) -> None:
+    """Bind `threads:` and `turns:` annotations, and register turn anchors.
+
+    Every message is addressable whether or not it is annotated, so the plot can
+    quote a turn with `ldq:` without the turn needing a sidecar entry first.
+    """
+    per_thread = spec.get("threads") or {}
+    per_turn = spec.get("turns") or {}
+    seen: set[str] = set()
+
+    for thread in threads:
+        conf = per_thread.get(thread.id) or {}
+        thread.title = conf.get("title") or thread.title
+        thread.note_md = conf.get("note", "") or ""
+
+        for turn in thread.turns:
+            key = f"{thread.id}:{turn.id}"
+            tconf = per_turn.get(key)
+            if tconf is None:
+                tconf = per_turn.get(turn.id) if turn.id in per_turn else None
+                if tconf is not None:
+                    seen.add(turn.id)
+            else:
+                seen.add(key)
+            tconf = tconf or {}
+
+            base = slug(tconf.get("id")) if tconf.get("id") else slug(f"turn-{key}")
+            turn.anchor_id = base
+            turn.thread_title = thread.title
+            turn.note_md = tconf.get("note", "") or ""
+
+            whole = Anchor(file=turn.prompt, start=0, end=len(turn.prompt.lines) - 1,
+                           anchor_id=base)
+            if base in anchors:
+                warnings.append(f"duplicate id {base!r}; later definition wins")
+            anchors[base] = whole
+
+            for side, body in (("prompt", turn.prompt), ("response", turn.response)):
+                if body is None:
+                    if tconf.get(side):
+                        warnings.append(f"{key}: no {side} to anchor `{side}:` to")
+                    continue
+                spec = tconf.get(side)
+                specs = spec if isinstance(spec, list) else [spec] if spec else []
+                if specs:
+                    found = [resolve_anchor(body, one, warnings) for one in specs]
+                    ranges = sorted((a.start, a.end) for a in found)
+                    if side == "prompt":
+                        turn.prompt_ranges = ranges
+                    else:
+                        turn.response_ranges = ranges
+                else:
+                    found = [
+                        Anchor(file=body, start=0, end=len(body.lines) - 1, anchor_id="")
+                    ]
+                # The first passage answers to `-prompt`/`-response`; a second
+                # or third is `-prompt2`, `-prompt3`, so each is quotable.
+                for n, anchor in enumerate(found, start=1):
+                    aid = f"{base}-{side}" + ("" if n == 1 else str(n))
+                    anchor.anchor_id = aid
+                    anchors[aid] = anchor
+
+            for extra in tconf.get("anchors") or []:
+                if not extra.get("id"):
+                    warnings.append(f"{key}: `anchors` entry without an id is a no-op")
+                    continue
+                side = extra.get("in", "prompt")
+                body = turn.prompt if side == "prompt" else turn.response
+                if body is None:
+                    warnings.append(f"{key}: anchor {extra['id']!r} names a missing {side}")
+                    continue
+                anchor = resolve_anchor(body, extra, warnings)
+                aid = slug(extra["id"])
+                if aid in anchors:
+                    warnings.append(f"duplicate id {aid!r}; later definition wins")
+                anchor.anchor_id = aid
+                anchors[aid] = anchor
+
+    for key in per_turn:
+        if key not in seen:
+            warnings.append(f"turns: {key!r} is not in the transcript")
+    known = {t.id for t in threads}
+    for key in per_thread:
+        if key not in known:
+            warnings.append(f"threads: {key!r} is not in the transcript")
+
+
+def build_stream(
+    threads: list[Thread], spec: dict, anchors: dict, warnings: list[str]
+) -> tuple[list[Turn], list[AppendixChapter]]:
+    """One chronological stream across every thread, cut into titled runs.
+
+    Turns without a timestamp keep the order they were collected in, after
+    everything that has one, rather than sorting to the front.
+    """
+    turns = [t for thread in threads for t in thread.turns]
+    turns.sort(key=lambda t: (t.at == "", t.at))
+
+    where = {f"{t.thread}:{t.id}": i for i, t in enumerate(turns)}
+    conf = spec.get("appendix") or {}
+    chapters: list[AppendixChapter] = []
+    for ci, raw in enumerate(conf.get("chapters") or []):
+        at = raw.get("at")
+        if at is None:
+            warnings.append("appendix chapter is missing `at`")
+            continue
+        if at not in where:
+            warnings.append(f"appendix chapter starts at {at!r}, which is not in the transcript")
+            continue
+        cid = slug(raw["id"]) if raw.get("id") else f"ac{ci}"
+        chapters.append(
+            AppendixChapter(
+                title=raw.get("title", "") or "",
+                note_md=raw.get("note", "") or "",
+                anchor_id=cid,
+                start=where[at],
+            )
+        )
+    chapters.sort(key=lambda c: c.start)
+    for chapter in chapters:
+        aid = f"ac-{chapter.anchor_id}"
+        if aid not in anchors:
+            anchors[aid] = anchors.get(turns[chapter.start].anchor_id)
+    return turns, chapters
 
 
 def build_document(files: list[FileDiff], spec: dict, meta: dict) -> Document:
@@ -439,6 +591,16 @@ def build_document(files: list[FileDiff], spec: dict, meta: dict) -> Document:
         if mark["start"] < len(out):
             anchors[cid] = anchors[f"f{mark['start']}"]
 
+    threads: list[Thread] = []
+    turns: list[Turn] = []
+    appendix_chapters: list[AppendixChapter] = []
+    if meta.get("transcript"):
+        threads = load_transcript(meta["transcript"], warnings)
+        attach_threads(threads, spec, anchors, warnings)
+        turns, appendix_chapters = build_stream(threads, spec, anchors, warnings)
+    elif spec.get("turns") or spec.get("threads"):
+        warnings.append("`turns:`/`threads:` need a `transcript:` to bind to")
+
     return Document(
         title=spec.get("title") or meta.get("title") or "Literate diff",
         subtitle=spec.get("subtitle", "") or "",
@@ -449,4 +611,8 @@ def build_document(files: list[FileDiff], spec: dict, meta: dict) -> Document:
         chapters=chapters,
         warnings=warnings,
         categories=categories,
+        threads=threads,
+        turns=turns,
+        appendix_chapters=appendix_chapters,
+        appendix=spec.get("appendix") or {},
     )

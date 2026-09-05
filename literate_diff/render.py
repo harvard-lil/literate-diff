@@ -10,6 +10,8 @@ from importlib import resources
 from markdown_it import MarkdownIt
 
 from .annotate import AnnotatedFile, Anchor, Document
+from .message import inline_row, render_message
+from .transcript import Turn, TurnBody, format_span, format_when
 
 REF_RE = re.compile(r'<a href="(ld|ldq|ldc):#([^"]+)"([^>]*)>(.*?)</a>', re.S)
 
@@ -56,6 +58,96 @@ _md = MarkdownIt("commonmark", {"html": True, "linkify": False}).enable(
 )
 
 
+def _lead(lines, budget: int = 320) -> int:
+    """The default highlight: enough rows to say what the message is about.
+
+    Four rules, in order. Keep a heading with the paragraph under it, since a
+    heading alone says nothing. Prefer to stop on a paragraph boundary rather
+    than mid-thought, so the fold does not land between two sentences of one
+    argument -- but give way at twice the budget, since a long paste with no
+    blank line in it still has to fold somewhere. And do not fold a short tail:
+    hiding two sentences behind a control costs the reader more than showing
+    them.
+    """
+    if not lines:
+        return 0
+    spent = 0
+    last = 0
+    started = False
+    for line in lines:
+        if line.kind in ("blank", "fence", "tablesep"):
+            if started and spent >= budget:
+                break
+            continue
+        last = line.index
+        if line.kind in ("heading", "rule") and not started:
+            continue
+        started = True
+        spent += len(line.text)
+        if spent >= budget * 2:
+            break
+
+    tail = [ln for ln in lines if ln.index > last and ln.kind not in ("blank", "fence")]
+    if sum(len(ln.text) for ln in tail) < budget // 2:
+        return len(lines) - 1
+    return last
+
+
+def _close(lines, first_shown: int, budget: int = 220) -> int:
+    """Where the closing passage starts.
+
+    A message's last paragraph is doing more work than its length suggests: it
+    is what the next prompt answers. A reply ends on the recommendation or the
+    question back; a long paste ends on the thing the person actually wanted
+    asked. Folding it away leaves the turn after it unintelligible.
+    """
+    spent = 0
+    start = len(lines) - 1
+    for line in reversed(lines):
+        if line.index <= first_shown:
+            break
+        if line.kind in ("blank", "fence", "tablesep"):
+            if spent >= budget:
+                break
+            start = line.index
+            continue
+        start = line.index
+        spent += len(line.text)
+        if spent >= budget * 2:
+            break
+    while start < len(lines) and lines[start].kind in ("blank", "fence", "tablesep"):
+        start += 1
+    start = min(start, len(lines) - 1)
+
+    # Do not open the closing passage half-way down a list or a table: back up
+    # to the top of the block, and take the heading that introduces it.
+    kind = lines[start].kind
+    if kind in ("bullet", "table", "tablesep", "code", "fence"):
+        family = {"table", "tablesep"} if kind in ("table", "tablesep") else {kind}
+        if kind in ("code", "fence"):
+            family = {"code", "fence"}
+        while start > first_shown + 1 and lines[start - 1].kind in family:
+            start -= 1
+    back = start - 1
+    while back > first_shown and lines[back].kind in ("blank", "fence"):
+        back -= 1
+    if back > first_shown and lines[back].kind == "heading":
+        start = back
+    return start
+
+
+def _default_ranges(lines, budget: int) -> list[tuple[int, int]]:
+    """The opening, and the close it will be answered on."""
+    lead = _lead(lines, budget)
+    end = len(lines) - 1
+    if lead >= end:
+        return [(0, end)]
+    start = _close(lines, lead)
+    if start <= lead + 1:
+        return [(0, end)]
+    return [(0, lead), (start, end)]
+
+
 def _asset(name: str) -> str:
     return resources.files("literate_diff.assets").joinpath(name).read_text("utf-8")
 
@@ -67,12 +159,31 @@ class Renderer:
             d["name"]: d for d in (doc.meta.get("sources") or []) if d.get("name")
         }
         self.file_index = {id(af.diff): fi for fi, af in enumerate(doc.files)}
+        # Every anchorable body -- a file's diff or one message -- gets a DOM id
+        # prefix and a document position, so arrows and jumps work the same way
+        # whether a reference lands in the diff or in the appendix.
+        self.body_dom: dict[int, str] = {
+            id(af.diff): f"f{fi}" for fi, af in enumerate(doc.files)
+        }
+        self.body_pos: dict[int, int] = {
+            id(af.diff): fi for fi, af in enumerate(doc.files)
+        }
+        self.turns: list[Turn] = doc.turns
+        after = len(doc.files)
+        for ti, turn in enumerate(self.turns):
+            turn.dom_index = ti  # type: ignore[attr-defined]
+            self.body_dom[id(turn.prompt)] = f"t{ti}p"
+            self.body_pos[id(turn.prompt)] = after + ti
+            if turn.response is not None:
+                self.body_dom[id(turn.response)] = f"t{ti}q"
+                self.body_pos[id(turn.response)] = after + ti
+
         # Document position of every anchor, for computing back/forward arrows.
         self.pos: dict[str, tuple[int, int]] = {}
         for aid, anchor in doc.anchors.items():
-            fi = self.file_index.get(id(anchor.file))
-            if fi is not None:
-                self.pos[aid] = (fi, anchor.start)
+            bi = self.body_pos.get(id(anchor.file))
+            if bi is not None:
+                self.pos[aid] = (bi, anchor.start)
 
         # Categories: colour by declaration order unless one was given.
         self.cats: dict[str, dict] = {}
@@ -84,6 +195,9 @@ class Renderer:
         # number themselves from items defined anywhere, and items can list the
         # flags that point at them.
         self.final = False
+        # Rows of files that render folded shut, handed to the client as data
+        # rather than markup. See `file_table`.
+        self.lazy: dict[str, dict] = {}
         self.cat_items: dict[str, dict] = {}
         self.cat_counts: dict[str, int] = {}
         self.cat_flags: dict[str, list[dict]] = {}
@@ -150,9 +264,14 @@ class Renderer:
             return self._quote(anchor, target, label)
 
         arrow, direction = self._arrow(here, self.pos.get(target))
+        # A reference with no label is a citation, not a phrase: the prose has
+        # already said the thing, and this says where it came from. Render it
+        # as a marker rather than an arrow adrift in the sentence.
+        cite = " ld-cite" if not label.strip() else ""
         return (
-            f'<a class="ld-ref ld-ref-{direction}" href="#{html.escape(target)}"'
-            f' data-ld-target="{html.escape(target)}">{arrow}{label}</a>'
+            f'<a class="ld-ref ld-ref-{direction}{cite}" href="#{html.escape(target)}"'
+            + (' title="in the conversation"' if cite else "")
+            + f' data-ld-target="{html.escape(target)}">{arrow}{label}</a>'
         )
 
     # --- categories ----------------------------------------------------------
@@ -239,6 +358,8 @@ class Renderer:
         )
 
     def _quote(self, anchor: Anchor, target: str, label: str) -> str:
+        if isinstance(anchor.file, TurnBody):
+            return self._quote_prose(anchor, target, label)
         rows = []
         for line in anchor.file.lines[anchor.start : anchor.end + 1]:
             if line.kind == "hunk":
@@ -272,7 +393,62 @@ class Renderer:
 
     # --- diff table ----------------------------------------------------------
 
+    def _row_data(self, fi: int, af: AnnotatedFile):
+        """A file's diff as rows and section headers, for the client to build.
+
+        A collapsed file is markup nobody has asked to see: 145 bytes of table
+        scaffolding per line for about 47 bytes of code. Handing over the rows
+        instead costs the text and little else, and nothing is lost that worked
+        before -- a folded `<details>` is already invisible to find-in-page.
+        """
+        sections_at: dict[int, list] = {}
+        for sec in af.sections:
+            sections_at.setdefault(sec.anchor.start, []).append(sec)
+        marked: dict[int, list[str]] = {}
+        for note in af.notes:
+            for i in range(note.anchor.start, note.anchor.end + 1):
+                marked.setdefault(i, []).append(note.anchor_id)
+
+        rows = []
+        for line in af.diff.lines:
+            rows.append(
+                [
+                    line.kind[0],  # c(ontext) a(dd) d(el) h(unk) m(essage)
+                    line.old_no or 0,
+                    line.new_no or 0,
+                    line.text,
+                    ",".join(marked.get(line.index, ())),
+                ]
+            )
+        sections = {
+            str(at): "".join(self.section_row(fi, af, sec) for sec in secs)
+            for at, secs in sections_at.items()
+        }
+        return {"rows": rows, "sections": sections}
+
+    def section_row(self, fi: int, af: AnnotatedFile, sec) -> str:
+        owner = sec.title or af.diff.path.split("/")[-1]
+        note = (
+            f'<div class="ld-section-note">'
+            f"{self.md(sec.note_md, (fi, sec.anchor.start), owner)}</div>"
+            if sec.note_md.strip()
+            else ""
+        )
+        title = (
+            f'<h3 class="ld-section-title">{html.escape(sec.title)}</h3>' if sec.title else ""
+        )
+        return (
+            f'<tr class="ld-sectionrow" id="{html.escape(sec.anchor_id)}">'
+            f'<td colspan="3"><div class="ld-section">{title}{note}</div></td></tr>'
+        )
+
     def file_table(self, fi: int, af: AnnotatedFile) -> str:
+        # Folded shut: hand the client the rows and let it build the table the
+        # first time someone opens the file.
+        if af.collapsed:
+            self.lazy[f"f{fi}"] = self._row_data(fi, af)
+            return '<table class="ld-diff"><tbody></tbody></table>'
+
         sections_at: dict[int, list] = {}
         for s in af.sections:
             sections_at.setdefault(s.anchor.start, []).append(s)
@@ -284,17 +460,7 @@ class Renderer:
         parts = ['<table class="ld-diff"><tbody>']
         for line in af.diff.lines:
             for s in sections_at.get(line.index, []):
-                parts.append(
-                    f'<tr class="ld-sectionrow" id="{html.escape(s.anchor_id)}">'
-                    '<td colspan="3"><div class="ld-section">'
-                    + (f'<h3 class="ld-section-title">{html.escape(s.title)}</h3>' if s.title else "")
-                    + (
-                        f'<div class="ld-section-note">{self.md(s.note_md, (fi, s.anchor.start), s.title or af.diff.path.split("/")[-1])}</div>'
-                        if s.note_md.strip()
-                        else ""
-                    )
-                    + "</div></td></tr>"
-                )
+                parts.append(self.section_row(fi, af, s))
 
             rid = f"f{fi}-r{line.index}"
             if line.kind == "hunk":
@@ -367,10 +533,11 @@ class Renderer:
             f'<span class="ld-stat ld-stat-del">−{d.deletions}</span>'
         )
         open_attr = "" if af.collapsed else " open"
+        lazy = f' data-ld-lazy="f{fi}"' if af.collapsed else ""
         return (
             f'<section class="ld-file" id="f{fi}" data-ld-path="{html.escape(d.path)}">'
             f"{note}"
-            f'<details class="ld-fileblock"{open_attr}>'
+            f'<details class="ld-fileblock"{open_attr}{lazy}>'
             f'<summary class="ld-filehead">'
             f'<span class="ld-chev" aria-hidden="true">▸</span>'
             f"{src}"
@@ -380,6 +547,216 @@ class Renderer:
             f'<div class="ld-body"><div class="ld-diffwrap">{self.file_table(fi, af)}</div>'
             f'<div class="ld-gutter">{self.file_notes(fi, af)}</div></div>'
             f"</details></section>"
+        )
+
+    def _quote_prose(self, anchor: Anchor, target: str, label: str) -> str:
+        """Quote a message the way `ldq:` quotes a diff: the words themselves,
+        with a link through to where they were said."""
+        body = anchor.file
+        rows = [
+            f'<span class="ld-qrow ld-q{line.kind}">'
+            f'<span class="ld-qtext">{inline_row(line) or "&nbsp;"}</span></span>'
+            for line in body.lines[anchor.start : anchor.end + 1]
+        ]
+        who = "said" if body.kind == "prompt" else "replied"
+        head = (
+            f'<span class="ld-qhead"><span class="ld-qwho">'
+            f"{html.escape(body.label)} — {who}</span>"
+            f'<a class="ld-qjump" href="#{html.escape(target)}"'
+            f' data-ld-target="{html.escape(target)}">go to context ↦</a></span>'
+        )
+
+        # A quote with no label is the sentence itself, not a reference to it:
+        # show it, the way a pulled quote sits in a paragraph. With a label it
+        # stays a control, for citing a passage the prose is not reciting.
+        if not label.strip():
+            return (
+                '<span class="ld-quote ld-quote-said ld-quote-open">'
+                f'<span class="ld-quote-body">{head}{"".join(rows)}</span></span>'
+            )
+        return (
+            '<span class="ld-quote ld-quote-said">'
+            f'<button type="button" class="ld-quote-btn" aria-expanded="false"'
+            f' data-ld-target="{html.escape(target)}">{label}</button>'
+            f'<span class="ld-quote-body" hidden>{head}{"".join(rows)}</span></span>'
+        )
+
+    # --- appendix ------------------------------------------------------------
+
+    def message(self, turn: Turn, body: TurnBody, ranges, side: str) -> str:
+        """One message, rendered as the markdown it was written in, folded to
+        its highlight."""
+        dom = self.body_dom[id(body)]
+        n = len(body.lines)
+        if not ranges:
+            # A reply is given a little more room than a prompt: the reader is
+            # there to judge what came back.
+            ranges = _default_ranges(body.lines, 320 if side == "prompt" else 460)
+        shown = sum(b - a + 1 for a, b in ranges)
+        hidden = n - shown
+        more = (
+            '<button type="button" class="ld-msg-more" aria-expanded="false">'
+            f"show all ({n} lines)</button>"
+            if hidden > 0
+            else ""
+        )
+        who = "Prompt" if side == "prompt" else "Reply"
+        return (
+            f'<div class="ld-msg ld-msg-{side}" id="{html.escape(turn.anchor_id)}-{side}">'
+            f'<div class="ld-who">{who}</div>'
+            f'<div class="ld-msg-body">{render_message(body.lines, dom, ranges)}'
+            f"{more}</div></div>"
+        )
+
+    def work_band(self, turn: Turn) -> str:
+        """What happened in between, as counts. Not expandable: the outcome of
+        the work is the diff above, and this is here to show its shape."""
+        work = turn.work
+        summary = work.summary()
+        if not summary and not work.attachments:
+            return ""
+        bits = [f'<span class="ld-work-counts">{html.escape(summary)}</span>']
+        if work.attachments:
+            names = ", ".join(html.escape(a) for a in work.attachments[:4])
+            extra = f" +{len(work.attachments) - 4}" if len(work.attachments) > 4 else ""
+            bits.append(f'<span class="ld-work-att">attached {names}{extra}</span>')
+        if work.images:
+            bits.append(f'<span class="ld-work-att">{work.images} image(s)</span>')
+        if work.events:
+            bits.append(
+                f'<span class="ld-work-att">{work.events} background '
+                f'{"report" if work.events == 1 else "reports"}</span>'
+            )
+        if work.compacted:
+            bits.append('<span class="ld-work-att">context compacted</span>')
+        if work.interrupted:
+            bits.append('<span class="ld-work-att">interrupted</span>')
+        line = work.narration[0] if work.narration else ""
+        if line:
+            line = line.split("\n")[0]
+            if len(line) > 120:
+                line = line[:119].rstrip() + "…"
+            bits.append(f'<span class="ld-work-said">{html.escape(line)}</span>')
+        return f'<div class="ld-work">{"".join(bits)}</div>'
+
+    def turn_block(self, turn: Turn, show_thread: bool) -> str:
+        stamp = format_when(turn.at, turn.zone)
+        note = (
+            f'<div class="ld-turn-note">'
+            f"{self.md(turn.note_md, self.pos.get(turn.anchor_id), turn.id)}</div>"
+            if turn.note_md.strip()
+            else ""
+        )
+        # With more than one thread interleaved, the reader has to be told when
+        # a turn came from a session opened alongside the main one.
+        badge = (
+            f'<span class="ld-turn-thread">{html.escape(turn.thread_title)}</span>'
+            if show_thread and turn.thread_title
+            else ""
+        )
+        return (
+            f'<article class="ld-turn" id="{html.escape(turn.anchor_id)}"'
+            f' data-ld-thread="{html.escape(turn.thread)}">'
+            f'<div class="ld-turn-head"><span class="ld-turn-time">{html.escape(stamp)}</span>'
+            f'<a class="ld-turn-id" href="#{html.escape(turn.anchor_id)}"'
+            f' data-ld-target="{html.escape(turn.anchor_id)}">{html.escape(turn.id)}</a>'
+            f"{badge}</div>"
+            f"{note}"
+            f"{self.message(turn, turn.prompt, turn.prompt_ranges, 'prompt')}"
+            f"{self.work_band(turn)}"
+            + (
+                self.message(turn, turn.response, turn.response_ranges, "reply")
+                if turn.response is not None
+                else ""
+            )
+            + "</article>"
+        )
+
+    def appendix(self) -> str:
+        doc = self.doc
+        if not doc.turns:
+            return ""
+        conf = doc.appendix if isinstance(doc.appendix, dict) else {}
+        title = conf.get("title") or "Appendix: the conversation"
+        here = (len(doc.files), -1)
+        intro = (
+            f'<div class="ld-appendix-note">{self.md(conf.get("note", ""), here)}</div>'
+            if conf.get("note")
+            else ""
+        )
+
+        stamps = [t.at for t in doc.turns if t.at]
+        span = format_span(stamps[0], stamps[-1], doc.turns[0].zone) if stamps else ""
+        sessions = sum(len(t.sessions) or 1 for t in doc.threads)
+        meta = " · ".join(
+            x
+            for x in (
+                f"{len(doc.turns)} turns",
+                span,
+                f"{len(doc.threads)} threads" if len(doc.threads) > 1 else "",
+                f"{sessions} sessions",
+            )
+            if x
+        )
+
+        # Which sessions the stream is made of, and how much each contributed:
+        # a reader judging the work needs to know it is looking at all of it.
+        counts = "".join(
+            f'<li class="ld-thread-row">'
+            f'<div class="ld-thread-head"><span class="ld-thread-name">'
+            f"{html.escape(thread.title)}</span>"
+            f'<span class="ld-thread-count">{len(thread.turns)} turns · '
+            f"{len(thread.sessions) or 1} sessions</span></div>"
+            + (
+                f'<div class="ld-thread-note">'
+                f"{self.md(thread.note_md, here, thread.title)}</div>"
+                if thread.note_md.strip()
+                else ""
+            )
+            + "</li>"
+            for thread in doc.threads
+        )
+        sources_list = f'<ul class="ld-threads">{counts}</ul>'
+        notes = ""
+
+        many = len(doc.threads) > 1
+        starts = {c.start: c for c in doc.appendix_chapters}
+        body = []
+        previous = ""
+        for i, turn in enumerate(doc.turns):
+            chapter = starts.get(i)
+            if chapter is not None:
+                body.append(self.appendix_chapter(chapter))
+            # Only where the stream crosses from one session to another: a
+            # badge on all 243 would say nothing.
+            body.append(self.turn_block(turn, many and turn.thread != previous))
+            previous = turn.thread
+
+        return (
+            '<section class="ld-appendix" id="appendix">'
+            f'<h2 class="ld-appendix-title">{html.escape(title)}</h2>'
+            f'<div class="ld-appendix-meta">{html.escape(meta)}</div>'
+            f"{sources_list}{intro}{notes}"
+            f'<div class="ld-stream">{"".join(body)}</div>'
+            "</section>"
+        )
+
+    def appendix_chapter(self, chapter) -> str:
+        here = (len(self.doc.files) + chapter.start, -1)
+        note = (
+            f'<div class="ld-chapter-note">'
+            f'{self.md(chapter.note_md, here, chapter.title or "chapter")}</div>'
+            if chapter.note_md.strip()
+            else ""
+        )
+        title = (
+            f'<h3 class="ld-chapter-title">{html.escape(chapter.title)}</h3>'
+            if chapter.title
+            else ""
+        )
+        return (
+            f'<section class="ld-chapter ld-achapter" id="ac-{html.escape(chapter.anchor_id)}">'
+            f"{title}{note}</section>"
         )
 
     def chapter_header(self, ci: int, chapter) -> str:
@@ -427,7 +804,7 @@ class Renderer:
             items = "".join(
                 self.toc_file_item(fi, af) for fi, af in enumerate(self.doc.files)
             )
-            return f'<ol class="ld-toc-list">{items}</ol>'
+            return f'<ol class="ld-toc-list">{items}</ol>' + self.toc_appendix()
 
         out = []
         open_list = False
@@ -450,7 +827,27 @@ class Renderer:
             out.append(self.toc_file_item(fi, af))
         if open_list:
             out.append("</ol>")
-        return "".join(out)
+        return "".join(out) + self.toc_appendix()
+
+    def toc_appendix(self) -> str:
+        doc = self.doc
+        if not doc.turns:
+            return ""
+        head = (
+            '<div class="ld-toc-chapter"><a href="#appendix" data-ld-target="appendix">'
+            "Appendix</a></div>"
+        )
+        if not doc.appendix_chapters:
+            return head
+        bounds = [c.start for c in doc.appendix_chapters] + [len(doc.turns)]
+        items = "".join(
+            f'<li class="ld-toc-file"><a href="#ac-{html.escape(c.anchor_id)}"'
+            f' data-ld-target="ac-{html.escape(c.anchor_id)}">'
+            f'<span class="ld-toc-name">{html.escape(c.title or "…")}</span>'
+            f'<span class="ld-toc-path">{bounds[i + 1] - c.start} turns</span></a></li>'
+            for i, c in enumerate(doc.appendix_chapters)
+        )
+        return head + f'<ol class="ld-toc-list">{items}</ol>'
 
     def render(self) -> str:
         # Two passes. Category flags need the numbering of items that may be
@@ -492,6 +889,11 @@ class Renderer:
         else:
             meta_bits.append(f"{len(described)} repos")
         meta_bits.append(f"{len(doc.files)} files")
+        turns = len(doc.turns)
+        if turns:
+            meta_bits.append(
+                f'<a href="#appendix" data-ld-target="appendix">{turns} turns</a>'
+            )
         meta_bits.append(f'<span class="ld-stat-add">+{adds}</span>')
         meta_bits.append(f'<span class="ld-stat-del">−{dels}</span>')
 
@@ -501,11 +903,16 @@ class Renderer:
             if fi in starts:
                 body_parts.append(self.chapter_header(*starts[fi]))
             body_parts.append(self.file_section(fi, af))
+        body_parts.append(self.appendix())
         body = "".join(body_parts)
+        # Chapters borrow the anchor of the turn they open at, which is right
+        # for `ld:` arrows and wrong for jumping: the reader asked for the
+        # chapter, so land on its heading rather than inside the first prompt.
+        landmarks = {f"ac-{c.anchor_id}" for c in doc.appendix_chapters}
         anchor_map = {
-            aid: {"file": self.file_index[id(a.file)], "start": a.start, "end": a.end}
+            aid: {"body": self.body_dom[id(a.file)], "start": a.start, "end": a.end}
             for aid, a in doc.anchors.items()
-            if id(a.file) in self.file_index
+            if id(a.file) in self.body_dom and aid not in landmarks
         }
         return f"""<!doctype html>
 <html lang="en"><head>
@@ -531,7 +938,8 @@ class Renderer:
   <footer class="ld-footer">Generated by literate-diff.</footer>
 </main>
 </div>
-<script>window.LD_ANCHORS = {json.dumps(anchor_map)};</script>
+<script>window.LD_ANCHORS = {json.dumps(anchor_map)};
+window.LD_ROWS = {json.dumps(self.lazy, separators=(",", ":"))};</script>
 <script>{_asset("app.js")}</script>
 </body></html>
 """

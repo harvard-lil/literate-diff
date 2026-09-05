@@ -2,7 +2,70 @@
   "use strict";
 
   var ANCHORS = window.LD_ANCHORS || {};
+  var ROWS = window.LD_ROWS || {};
   var NARROW = window.matchMedia("(max-width: 62rem)");
+
+  /* --- files that arrive as rows rather than markup ------------------------ */
+
+  var KINDS = { c: "context", a: "add", d: "del", h: "hunk", m: "message" };
+  var SIGNS = { add: "+", del: "-" };
+
+  function cell(cls, text) {
+    var td = document.createElement("td");
+    td.className = cls;
+    if (text) td.textContent = text;
+    return td;
+  }
+
+  // A collapsed file ships as data: 145 bytes of table scaffolding per line is
+  // not worth spending on something folded shut. Build it the first time it is
+  // opened, or the first time a reference points into it.
+  function fill(block) {
+    var key = block.dataset.ldLazy;
+    if (!key) return false;
+    var data = ROWS[key];
+    delete block.dataset.ldLazy;
+    if (!data) return false;
+
+    var body = block.querySelector("table.ld-diff tbody");
+    if (!body) return false;
+    var html = [];
+    data.rows.forEach(function (r, i) {
+      var section = data.sections[i];
+      if (section) html.push(section);
+      var kind = KINDS[r[0]] || "context";
+      var tr = document.createElement("tr");
+      tr.id = key + "-r" + i;
+      tr.className = "ld-row ld-" + kind + (r[4] ? " ld-marked" : "");
+      if (r[4]) tr.dataset.ldNotes = r[4];
+      if (kind === "hunk" || kind === "message") {
+        tr.appendChild(cell("ld-no", ""));
+        tr.appendChild(cell("ld-no", ""));
+        tr.appendChild(cell("ld-text", r[3]));
+      } else {
+        tr.appendChild(cell("ld-no", r[1] ? String(r[1]) : ""));
+        tr.appendChild(cell("ld-no", r[2] ? String(r[2]) : ""));
+        var td = cell("ld-text", "");
+        var sign = document.createElement("span");
+        sign.className = "ld-sign";
+        sign.textContent = SIGNS[kind] || " ";
+        td.appendChild(sign);
+        td.appendChild(document.createTextNode(r[3]));
+        tr.appendChild(td);
+      }
+      html.push(tr.outerHTML);
+    });
+    body.innerHTML = html.join("");
+    return true;
+  }
+
+  function fillFor(id) {
+    // `id` may name a row inside a file that has not been built yet.
+    var key = /^(f\d+)/.exec(id);
+    if (!key) return;
+    var block = document.querySelector('[data-ld-lazy="' + key[1] + '"]');
+    if (block) fill(block);
+  }
 
   function rowIndex(note) {
     var m = /-r(\d+)$/.exec(note.dataset.ldRow || "");
@@ -12,9 +75,10 @@
   function rowsFor(targetId) {
     var a = ANCHORS[targetId];
     if (!a) return [];
+    fillFor(a.body);
     var out = [];
     for (var i = a.start; i <= a.end; i++) {
-      var el = document.getElementById("f" + a.file + "-r" + i);
+      var el = document.getElementById(a.body + "-r" + i);
       if (el) out.push(el);
     }
     return out;
@@ -96,6 +160,7 @@
   /* --- navigation ---------------------------------------------------------- */
 
   function reveal(targetId) {
+    fillFor(targetId);
     var rows = rowsFor(targetId);
     var el = document.getElementById(targetId);
     var focus = rows[0] || el;
@@ -106,12 +171,20 @@
       block.open = true;
       placeNotes();
     }
-    focus.scrollIntoView({ behavior: "smooth", block: "center" });
+    var msg = focus.closest(".ld-msg");
+    if (msg && focus.classList.contains("ld-elided")) openMessage(msg, true);
+    // Centre a line, but put the top of anything taller than the window at the
+    // top: centring a section that is longer than the viewport lands the reader
+    // in the middle of it, which is nowhere in particular.
+    var tall = focus.getBoundingClientRect().height > window.innerHeight * 0.8;
+    focus.scrollIntoView({ block: tall ? "start" : "center" });
 
     document.querySelectorAll(".ld-flash").forEach(function (n) {
       n.classList.remove("ld-flash");
     });
-    var flash = rows.length ? rows : el ? [el] : [];
+    // Flashing something taller than the window tints the whole screen, which
+    // points at nothing. Landing at its top is the cue.
+    var flash = rows.length ? rows : el && !tall ? [el] : [];
     flash.forEach(function (n) {
       n.classList.remove("ld-flash");
       void n.offsetWidth;
@@ -125,7 +198,27 @@
     }
   }
 
+  function openMessage(msg, open) {
+    msg.classList.toggle("is-open", open);
+    var btn = msg.querySelector(".ld-msg-more");
+    if (btn) {
+      btn.setAttribute("aria-expanded", String(open));
+      btn.textContent = open ? "show less" : btn.dataset.ldLabel;
+    }
+  }
+
+  document.querySelectorAll(".ld-msg-more").forEach(function (btn) {
+    btn.dataset.ldLabel = btn.textContent;
+  });
+
   document.addEventListener("click", function (ev) {
+    var more = ev.target.closest(".ld-msg-more");
+    if (more) {
+      ev.preventDefault();
+      var msg = more.closest(".ld-msg");
+      openMessage(msg, !msg.classList.contains("is-open"));
+      return;
+    }
     var jump = ev.target.closest("[data-ld-target]");
     if (jump && !jump.classList.contains("ld-quote-btn")) {
       ev.preventDefault();
@@ -148,6 +241,7 @@
 
   document.addEventListener("toggle", function (ev) {
     if (ev.target.classList && ev.target.classList.contains("ld-fileblock")) {
+      if (ev.target.open) fill(ev.target);
       schedulePlace();
     }
   }, true);
@@ -222,7 +316,7 @@
   /* --- table of contents current-file tracking ------------------------------ */
 
   function trackToc() {
-    var files = document.querySelectorAll(".ld-file");
+    var files = document.querySelectorAll(".ld-file, .ld-thread");
     if (!files.length || !("IntersectionObserver" in window)) return;
     var links = {};
     document.querySelectorAll(".ld-toc-file > a").forEach(function (a) {
