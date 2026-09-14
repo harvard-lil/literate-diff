@@ -1,8 +1,8 @@
 (function () {
   "use strict";
 
-  var ANCHORS = window.LD_ANCHORS || {};
-  var ROWS = window.LD_ROWS || {};
+  var ANCHORS = window.LD.presentation.anchors;
+  var ROWS = window.LD.presentation.rows;
   var NARROW = window.matchMedia("(max-width: 62rem)");
 
   /* --- files that arrive as rows rather than markup ------------------------ */
@@ -293,7 +293,7 @@
     tip.style.left = Math.max(window.scrollX + 8, Math.min(left, maxLeft)) + "px";
     tip.style.top = (r.bottom + window.scrollY + 8) + "px";
     flag.classList.add("ld-flag-active");
-    // The title attribute is kept for accessibility and no-JS readers; suppress
+    // The title attribute is kept for accessibility; suppress
     // the browser's own tooltip while ours is showing.
     flag.dataset.ldTitle = flag.getAttribute("title");
     flag.removeAttribute("title");
@@ -338,11 +338,48 @@
     files.forEach(function (f) { obs.observe(f); });
   }
 
+  /* --- the map: which layer the reader is in ------------------------------- */
+
+  function trackMap() {
+    var blocks = document.querySelectorAll(".ld-map-box");
+    if (!blocks.length || !("IntersectionObserver" in window)) return;
+    // The full-size map and the postage stamp share layer ids; mark both.
+    var byId = {};
+    blocks.forEach(function (b) { (byId[b.dataset.ldLayer] = byId[b.dataset.ldLayer] || []).push(b); });
+    var seen = new Set();
+    var obs = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) seen.add(e.target.id);
+          else seen.delete(e.target.id);
+        });
+        var current = null;
+        Object.keys(byId).forEach(function (id) {
+          if (seen.has(id) && current === null) current = id;
+        });
+        Object.keys(byId).forEach(function (id) {
+          byId[id].forEach(function (b) { b.classList.toggle("ld-current", id === current); });
+        });
+      },
+      { rootMargin: "-5% 0px -60% 0px" }
+    );
+    Object.keys(byId).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) obs.observe(el);
+    });
+  }
+
+  /* --- the data block, for page scripts and the console -------------------- */
+
+  window.LD.anchors = ANCHORS;
+  window.LD.reveal = reveal;
+
   /* --- boot ---------------------------------------------------------------- */
 
   function boot() {
     placeNotes();
     trackToc();
+    trackMap();
     if (location.hash.length > 1) reveal(location.hash.slice(1));
   }
 

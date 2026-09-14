@@ -7,7 +7,7 @@ import pytest
 
 from literate_diff.annotate import build_document
 from literate_diff.parse import parse_diff
-from literate_diff.render import render_document
+from rendered import render_document, presentation
 from literate_diff.transcript import load_transcript, split_rows
 
 DIFF = """\
@@ -61,7 +61,7 @@ def build(spec, transcript=None):
 def body(page: str) -> str:
     """The rendered document alone. The inlined stylesheet and client script
     mention every class name, so a bare `in page` proves nothing."""
-    return page.split("</style>", 1)[1].split("<script>", 1)[0]
+    return page.split("</style>", 1)[1].split('<script type="application/json"', 1)[0]
 
 
 # --- rows ---------------------------------------------------------------------
@@ -125,7 +125,7 @@ def test_the_appendix_renders_every_turn(transcript):
 
 def test_turns_are_addressable_without_being_annotated(transcript):
     page = build({}, transcript)
-    anchors = json.loads(re.search(r"window\.LD_ANCHORS = (\{.*?\});", page, re.S).group(1))
+    anchors = presentation(page)["anchors"]
     assert anchors["turn-registry-t0304-1500"]["body"] == "t0p"
     assert anchors["turn-registry-t0304-1500-response"]["body"] == "t0q"
 

@@ -84,7 +84,7 @@ threads:
           | candidates | `sha-` prefix | 30 |
           | deployed | `staging-`, `prod-` | 100 |
 
-          At h2o's image size that is roughly **$2.50 a month**, which is
+          At this image size that is a few dollars a month, which is
           below the noise floor of the account. The reason to expire anything
           is not cost; it is that an unbounded repository makes `describe-images`
           slow enough to time out in the deploy.

@@ -5,40 +5,42 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from .model import Row, Unit
+
 HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$")
 
 
-@dataclass
-class Line:
+class Line(Row):
     """One rendered row of a diff: a context/add/del line, or a hunk header."""
 
-    kind: str  # "context" | "add" | "del" | "hunk" | "message"
-    text: str
-    old_no: int | None = None
-    new_no: int | None = None
-    # Filled in by the annotator.
-    index: int = 0
-    dom_id: str = ""
-    marks: list = field(default_factory=list)
 
+@dataclass(kw_only=True)
+class FileDiff(Unit):
+    """One file's diff. A unit, so anchors and references reach into it."""
 
-@dataclass
-class FileDiff:
-    path: str  # display path (new path, or old path for deletes)
-    old_path: str | None
-    new_path: str | None
-    status: str  # "modified" | "added" | "deleted" | "renamed"
+    old_path: str | None = None
+    new_path: str | None = None
+    status: str = "modified"  # "modified" | "added" | "deleted" | "renamed"
     binary: bool = False
     additions: int = 0
     deletions: int = 0
-    lines: list[Line] = field(default_factory=list)
     mode_note: str = ""
-    source: str = ""  # name of the repo this came from, when there is more than one
+    key: str = ""
 
-    @property
-    def key(self) -> str:
-        """How the sidecar addresses this file: `source:path`, or a bare path."""
-        return f"{self.source}:{self.path}" if self.source else self.path
+    def __post_init__(self):
+        if not self.key:
+            self.key = f"{self.source}:{self.path}" if self.source else self.path
+
+    def find_extra(self, at: str, from_index: int) -> int | None:
+        """`+N` is line N on the new side, `-N` line N on the old side."""
+        if (at.startswith("+") or at.startswith("-")) and at[1:].isdigit():
+            want = int(at[1:])
+            side = "new_no" if at[0] == "+" else "old_no"
+            for i, line in enumerate(self.lines[from_index:], start=from_index):
+                if getattr(line, side) == want:
+                    return i
+            return -1
+        return None
 
 
 def _strip_prefix(p: str) -> str:
@@ -68,6 +70,7 @@ def parse_diff(text: str, source: str = "") -> list[FileDiff]:
                 new_path=_strip_prefix(new_p) if new_p else None,
                 status="modified",
                 source=source,
+                kind="diff",
             )
             files.append(cur)
             old_no = new_no = 0
@@ -90,6 +93,7 @@ def parse_diff(text: str, source: str = "") -> list[FileDiff]:
             cur.status = "renamed"
             cur.new_path = raw[len("rename to ") :]
             cur.path = cur.new_path
+            cur.key = f"{cur.source}:{cur.path}" if cur.source else cur.path
         elif raw.startswith("old mode ") or raw.startswith("new mode "):
             cur.mode_note = (cur.mode_note + " " + raw).strip()
         elif raw.startswith("Binary files ") or raw.startswith("GIT binary patch"):

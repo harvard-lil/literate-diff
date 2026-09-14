@@ -12,11 +12,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
 
-from .parse import Line
+from .model import Row as BaseRow
+from .model import Unit
 
 # A sentence end: terminal punctuation, optional closing quote or bracket, then
 # space and something that starts a new sentence.
@@ -79,21 +81,15 @@ def format_span(first: str, last: str, zone: str) -> str:
 
 
 @dataclass
-class Row:
-    """One row of a message. Duck-types `parse.Line` for the anchor machinery,
-    and carries the block structure the renderer needs to put the markdown
-    back together around it."""
+class Row(BaseRow):
+    """One row of a message: a sentence of prose, a line of code. Carries the
+    block structure the renderer needs to put the markdown back together
+    around it."""
 
-    kind: str  # prose | code | fence | blank | heading | bullet | quote | table | tablesep | rule
-    text: str
-    index: int = 0
+    # kind: prose | code | fence | blank | heading | bullet | quote | table | tablesep | rule
     block: int = 0  # source line, so sentences of one list item stay one item
     level: int = 0  # heading level, or bullet indent
     marker: str = ""  # the bullet's own marker, kept for ordered lists
-    dom_id: str = ""
-    old_no: None = None  # `+N` / `-N` anchors have nothing to address in prose
-    new_no: None = None
-    marks: list = field(default_factory=list)
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -117,16 +113,11 @@ def _split_sentences(text: str) -> list[str]:
     return out or [text.strip()]
 
 
-@dataclass
-class TurnBody:
-    """One message, as rows. Duck-types FileDiff for the anchor machinery."""
+@dataclass(kw_only=True)
+class TurnBody(Unit):
+    """One message, as rows."""
 
-    key: str
-    path: str
-    lines: list[Line]
-    source: str = ""
-    kind: str = "prose"  # "prompt" | "response"
-    label: str = ""
+    # kind: "prompt" | "response"
 
     @property
     def is_prose(self) -> bool:
@@ -201,6 +192,7 @@ class Thread:
     turns: list[Turn] = field(default_factory=list)
     note_md: str = ""
     zone: str = "UTC"
+    tool: str = ""  # the agent whose log it was collected from
 
 
 def split_rows(text: str) -> list[Row]:
@@ -276,9 +268,13 @@ def split_rows(text: str) -> list[Row]:
     return rows
 
 
-def load_transcript(path: str, warnings: list[str]) -> list[Thread]:
-    with open(path, encoding="utf-8") as fh:
-        data = yaml.safe_load(fh) or {}
+def load_transcript(path_or_text: str, warnings: list[str]) -> list[Thread]:
+    """Threads from a collected transcript: a path, or the YAML text itself."""
+    if "\n" not in path_or_text and Path(path_or_text).is_file():
+        text = Path(path_or_text).read_text(encoding="utf-8")
+    else:
+        text = path_or_text
+    data = yaml.safe_load(text) or {}
     zone = str(data.get("timezone") or "UTC")
     try:
         ZoneInfo(zone)
@@ -292,6 +288,9 @@ def load_transcript(path: str, warnings: list[str]) -> list[Thread]:
             title=raw.get("title") or raw.get("id") or "Conversation",
             sessions=list(raw.get("sessions") or []),
             zone=zone,
+            # Transcripts collected before threads carried their own `tool:`
+            # name it once, at the top.
+            tool=str(raw.get("tool") or data.get("tool") or ""),
         )
         for entry in raw.get("turns") or []:
             tid = str(entry.get("id") or f"t{len(thread.turns)}")

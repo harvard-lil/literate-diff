@@ -6,7 +6,7 @@ import pytest
 
 from literate_diff.annotate import build_document, matches, order_and_chapter
 from literate_diff.parse import parse_diff
-from literate_diff.render import render_document
+from rendered import render_document, presentation
 
 # Both repos carry a .github/workflows/main.yml -- the collision case.
 ACTIONS = """\

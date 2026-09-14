@@ -34,6 +34,11 @@ INJECTED_RE = re.compile(r"^\s*<(" + "|".join(INJECTED) + r")>", re.S)
 # Pressing escape writes a message in the user's voice that the user did not
 # write. It marks the turn it lands in rather than starting one.
 INTERRUPT_RE = re.compile(r"^\[Request interrupted by user[^\]]*\]\s*$")
+ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
+# The complement of what YAML allows in a document (PyYAML's reader check).
+NON_PRINTABLE_RE = re.compile(
+    "[^\t\n\r\x20-\x7e\x85\xa0-퟿-�\U00010000-\U0010ffff]"
+)
 
 
 def local_zone() -> str:
@@ -78,6 +83,11 @@ def _clean(text: str) -> str:
     """Drop what the harness injected, keeping what the person typed."""
     text = SYSTEM_REMINDER_RE.sub("", text)
     text = COMMAND_WRAPPER_RE.sub("", text)
+    # Terminal output pasted into a prompt brings its colour codes along. YAML
+    # cannot carry control characters even in a block scalar, so one of them
+    # makes the whole transcript unreadable.
+    text = ANSI_RE.sub("", text)
+    text = NON_PRINTABLE_RE.sub("", text)
     # Trailing whitespace would make the YAML block scalars unreadable, and a
     # transcript nobody can read is a transcript nobody redacts.
     return "\n".join(line.rstrip() for line in text.strip().split("\n")).strip()
@@ -281,30 +291,22 @@ def local_stamp(at: str, zone: str) -> str:
     return when.strftime("%Y%m%d %H%M")
 
 
-def collect(
-    repo: str,
-    home: Path,
-    titles: list[str] | None = None,
-    sessions: list[str] | None = None,
-    since: str = "",
-    merge_by_title: bool = False,
-    zone: str = "UTC",
-    warnings: list[str] | None = None,
-) -> list[Thread]:
-    warn = warnings if warnings is not None else []
+#: Agents whose local logs `collect` reads.
+TOOLS = ("claude-code", "codex")
+
+
+def _claude_threads(
+    repo: str, home: Path, sessions: list[str] | None
+) -> tuple[list[Thread], str, bool]:
+    """Claude sessions for `repo`, as (threads, where looked, store exists)."""
     directory = project_dir(repo, home)
     if not directory.is_dir():
-        raise SystemExit(f"no sessions found for {repo} (looked in {directory})")
-
+        return [], str(directory), False
     found: list[Thread] = []
     for path in sorted(directory.glob("*.jsonl")):
         if sessions and not any(path.stem.startswith(s) for s in sessions):
             continue
         title, turns = read_session(path)
-        if titles and not any(t.lower() in title.lower() for t in titles):
-            continue
-        if since:
-            turns = [t for t in turns if t.at >= since]
         if not turns:
             continue
         found.append(
@@ -316,11 +318,50 @@ def collect(
                 project=str(Path(repo).expanduser().resolve()),
             )
         )
+    return found, str(directory), True
+
+
+def collect(
+    repo: str,
+    home: Path,
+    titles: list[str] | None = None,
+    sessions: list[str] | None = None,
+    since: str = "",
+    merge_by_title: bool = False,
+    zone: str = "UTC",
+    warnings: list[str] | None = None,
+    tools: list[str] | tuple[str, ...] = ("claude-code",),
+) -> list[Thread]:
+    warn = warnings if warnings is not None else []
+    looked: list[str] = []
+    present = False
+    found: list[Thread] = []
+    for tool in tools:
+        if tool == "claude-code":
+            threads, where, exists = _claude_threads(repo, home, sessions)
+        elif tool == "codex":
+            from .codex import collect_codex
+
+            threads, where, exists = collect_codex(repo, home, sessions)
+        else:
+            raise SystemExit(f"unknown tool {tool!r}; known: {', '.join(TOOLS)}")
+        looked.append(where)
+        present = present or exists
+        found += threads
+    if not present:
+        raise SystemExit(f"no sessions found for {repo} (looked in {', '.join(looked)})")
+
+    if titles:
+        found = [t for t in found if any(w.lower() in t.title.lower() for w in titles)]
+    if since:
+        for thread in found:
+            thread.turns = [t for t in thread.turns if t.at >= since]
+        found = [t for t in found if t.turns]
 
     if titles:
         for want in titles:
             if not any(want.lower() in t.title.lower() for t in found):
-                warn.append(f"no session titled {want!r} under {directory}")
+                warn.append(f"no session titled {want!r} under {', '.join(looked)}")
 
     if merge_by_title:
         found = _merge(found, warn)
@@ -338,14 +379,15 @@ def _merge(threads: list[Thread], warn: list[str]) -> list[Thread]:
 
     A session resumed after a compaction repeats the turns that were carried
     over, so the same prompt appears in both files with the same timestamp.
-    Those are one turn, not two.
+    Those are one turn, not two. A Claude session and a Codex thread that
+    share a title stay separate threads: each is one agent's record.
     """
-    by_title: dict[str, Thread] = {}
+    by_title: dict[tuple[str, str], Thread] = {}
     out: list[Thread] = []
     for thread in threads:
-        first = by_title.get(thread.title)
+        first = by_title.get((thread.tool, thread.title))
         if first is None:
-            by_title[thread.title] = thread
+            by_title[(thread.tool, thread.title)] = thread
             out.append(thread)
             continue
         have = {(t.at, t.prompt) for t in first.turns}
@@ -391,7 +433,6 @@ def to_yaml(threads: list[Thread], meta: dict) -> str:
         "# anywhere: prompts and replies quote whatever was on screen at the time.",
         "# Editing is expected. Cut turns, redact lines, fix a title.",
         f"collected: {meta.get('collected', '')}",
-        f"tool: {meta.get('tool', 'claude-code')}",
         "# Timestamps below are UTC, as the logs record them. `timezone` is the",
         "# clock they are shown on, and the one the turn ids were derived from.",
         f"timezone: {meta.get('timezone', 'UTC')}",
@@ -401,6 +442,7 @@ def to_yaml(threads: list[Thread], meta: dict) -> str:
         ids = getattr(thread, "turn_ids", [f"t{i}" for i in range(len(thread.turns))])
         out.append(f"  - id: {thread.id}")
         out.append(f"    title: {json.dumps(thread.title)}")
+        out.append(f"    tool: {thread.tool}")
         out.append(f"    sessions: [{', '.join(thread.sessions)}]")
         out.append("    turns:")
         for tid, turn in zip(ids, thread.turns):

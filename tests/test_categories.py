@@ -4,7 +4,8 @@ import re
 
 from literate_diff.annotate import build_document
 from literate_diff.parse import parse_diff
-from literate_diff.render import PALETTE, render_document
+from literate_diff.render import PALETTE
+from rendered import render_document, presentation
 
 DIFF = """\
 diff --git a/a.py b/a.py
@@ -57,10 +58,10 @@ def spec(**over):
 
 def test_list_items_are_numbered_and_addressable():
     _, html = build(spec())
-    assert '<li id="cat-least-priv" data-ld-cat="security">' in html
+    assert '<li id="cat-least-priv" data-ld-cat="security"' in html
     # The second item took no explicit id, so it gets category-number.
     assert '<li id="cat-security-2"' in html
-    assert '<li id="cat-alb" data-ld-cat="cost">' in html
+    assert '<li id="cat-alb" data-ld-cat="cost"' in html
     # The `{#id}` marker itself is gone from the text.
     assert "{#least-priv}" not in html
     assert "{category:" not in html

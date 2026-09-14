@@ -1,302 +1,199 @@
 # literate-diff
 
-Turns a git diff plus a YAML annotation sidecar into a single, self-contained
-HTML file: a diff arranged and annotated as a narrative rather than as a list of
-changed files.
+Builds a **debrief**: one self-contained HTML file, from a YAML sidecar and
+a set of sources (a git diff across one or more repositories, the agent
+conversations behind it, notes, reference documents, a glossary). A debrief
+has three parts. A *summary* says what the author wants each reader to
+know. A *synthesis* says why the author believes it, every claim citing its
+evidence, with the ones that cite nothing marked. The *evidence* is the
+record itself, embedded whole. The file says how to read itself, so it can
+be dragged into Slack or attached to a ticket and still be queried by a
+script or handed to an agent as a knowledge base. `DESIGN.md` has the
+vocabulary; a literate diff is the code block of a debrief.
 
 ```bash
-uv run literate-diff --repo ../some-repo --range prod...main \
-    -a notes.yaml -o review.html
+uv run literate-diff -a notes.yaml -o review.html
 ```
 
 Or, without cloning this repository:
 
 ```bash
 uvx --from git+https://github.com/harvard-lil/literate-diff literate-diff \
-    --repo ../some-repo --range prod...main -a notes.yaml -o review.html
+    -a notes.yaml -o review.html
 ```
 
-The output has no external requests — CSS and JS are inlined — so it can be
-emailed, dropped in a bucket, or attached to a ticket.
+[`.agents/skills/literate-diff/SKILL.md`](.agents/skills/literate-diff/SKILL.md)
+is the working order for writing one; [`DESIGN.md`](DESIGN.md) is the
+architecture. This file is the reference for every key.
 
-## Input
+## Authoring a team debrief
 
-Either a repo and a range:
+[Writing a work debrief](docs/debrief-authoring.md) defines success: colleagues
+can understand the result, act on it and choose where to review more closely.
+It covers evidence status, corrections and reversals, optional system models,
+role summaries, navigation copy and cold reads. Read it with the
+[authoring skill](.agents/skills/literate-diff/SKILL.md); a clean build verifies
+links and structure, not the truth or completeness of the account.
 
-```bash
-literate-diff --repo path/to/repo --range prod...main
-```
 
-or a diff that already exists, which is useful when the repo is not to hand:
-
-```bash
-git diff prod...main > changes.patch
-literate-diff --diff changes.patch
-# or: git diff prod...main | literate-diff --diff -
-```
-
-`--pathspec` limits the diff, `-U/--context` sets context lines.
-
-To start a sidecar, `--outline` prints a YAML skeleton listing every file in the
-diff:
-
-```bash
-literate-diff --repo path/to/repo --range prod...main --outline > notes.yaml
-```
-
-## The annotation file
-
-Every key is optional; with no sidecar you get a plain readable diff.
+## The shape of a document
 
 ```yaml
-title: "One build graph"
-subtitle: "Making CI test the artifact that ships"
+title: "One image, dev to prod"
+subtitle: "h2o's deploy overhaul, 31 August to 4 September"
 
-# The Plot: why this batch exists, and what the reader is about to see.
-# The skill in `.agents/skills/literate-diff/` sets out the sections it
-# usually wants -- an executive summary, what each audience should take from
-# the work, the story, terms, wins by kind, and how the decisions arrived.
-plot: |
-  Markdown. Rendered at the top, above every file.
+brief:            # not rendered: who this is for and why (see the skill)
+  readers: [...]
 
-# Files render in this order; '*' is everything not named above. Globs work.
-order:
-  - web/config/settings/__init__.py
-  - Dockerfile
-  - "*"
+sources:          # the evidence, each with a type
+  h2o:     {repo: ../h2o, range: 63da32f3...origin/main}
+  chat:    {type: transcript, file: conversations.yaml}
+  said:    {type: notes, items: [...]}
+  terms:   {type: terms, items: [...]}
 
-hide:                        # dropped entirely
-  - "web/static/dist/**"
-collapse:                    # rendered, but folded shut
-  - "web/package-lock.json"
+categories:       # kinds of claim, for the numbered lists
+  security: {label: Security, short: S}
 
-files:
-  Dockerfile:
-    title: one build graph   # shown next to the path
-    collapsed: false
-    note: |                  # File-level: introduces the file, in the story
-      Markdown, rendered above the diff.
+layers:           # the debrief, top to bottom
+  - id: summary
+    group: summary
+    title: Executive summary
+    subtitle: What changed, and what still needs checking.
+    audience: anyone
+    budget: 1 minute
+    claims: required
+    text: |
+      {claims}
+      - Deploys no longer take the site down by default [](ldc:#window-when-needed).
+  - id: developers
+    group: summary
+    row: 2
+    title: Developers
+    text: ...
+  - id: improvements
+    group: synthesis
+    title: Improvements
+    subtitle: Changes to reliability, security, development, and cost.
+    text: |
+      {category: security}
+      1. {#oidc-scope} Before, ... Now, ...
+  - id: code
+    kind: stream
+    group: evidence
+    title: Code
+    sources: [h2o]
+    chapters: [...]
+  - id: conversation
+    kind: stream
+    group: evidence
+    title: Conversation
+    sources: [chat]
+    chapters: [...]
 
-    sections:                # File-section-level: a band inside the diff
-      - at: "FROM prod AS test"
-        id: dockerfile-test
-        title: "test — what CI runs the suite against"
-        note: "Markdown."
-
-    notes:                   # Line-level: a sidenote in the right margin
-      - at: "ENV H2O_SETTINGS_MODULE"
-        span: 1
-        id: settings-env
-        text: "Markdown. A footnote, not part of the story."
-
-    anchors:                 # Named ranges with no visible output, for linking
-      - id: uwsgi-build
-        at: "CPUCOUNT=1"
-        span: 5
+files:            # per-file annotations for diff sources
+  Dockerfile: {title: ..., note: ..., sections: [...], notes: [...]}
+turns:            # per-turn annotations for transcript sources
+  main:t0901-0913: {id: q-widen, prompt: {at: "..."}}
 ```
 
-### Anchoring
+Every key is optional. With no sidecar at all, `--repo` and `--range` give
+a plain readable diff.
 
-`at:` locates a row in that file's diff. Ordering is by position in the diff, so
-an anchor is stable against changes elsewhere in the batch.
+### The v1 shape still works
 
-| form | meaning |
-| --- | --- |
-| `"some text"` | first diff row containing that substring |
-| `/regex/` | first row matching the regex |
-| `+412` | the row that is line 412 on the new side |
-| `-88` | the row that is line 88 on the old side |
-| `@37` | the 37th row of this file's diff, counting from 0 |
+A sidecar with `plot:`, `chapters:`/`order:`, `hide:`, `collapse:`,
+`files:`, `transcript:`, `appendix:`, `threads:` and `turns:` and no
+`layers:` is read as three layers: one prose layer from the plot, one stream
+of the diff sources, one stream of the transcript. It renders as it did
+before, without layer headers or the map. Move to `layers:` when the
+document is next edited.
 
-`nth: 2` takes the second match rather than the first. A range extends with
-either `span: 5` (five rows) or `through: "other text"` (up to the next match).
+## Layers
 
-An unmatched anchor is a warning on stderr, not an error: it falls back to the
-top of the file so the build still produces something readable.
+A layer is prose (`text:`) or a stream (`kind: stream`, `sources:`). It
+belongs to a `group` (`summary`, `synthesis` or `evidence`; prose defaults
+to synthesis, streams to evidence) and a `row` within the group. Its
+`title` names the subject or question; an optional `subtitle` clarifies what the block
+contains and where it came from; those two render in the header and on the
+map. `audience` and `budget` are metadata for the brief, the lint and the
+cold read, shown on hover in the map.
 
-### References and quotes
-
-Inside any annotation, a markdown link with the `ld:` scheme points at an `id`
-elsewhere in the document:
-
-```markdown
-See [the settings switch](ld:#settings-switch) for where this value comes from.
-```
-
-The arrow (`↑` back, `↓` forward) is computed from position in the rendered
-document, so reordering files cannot leave a "see below" pointing upward.
-Clicking opens the target's file if it is collapsed, scrolls to it, and
-highlights the anchored lines.
-
-The `ldq:` scheme quotes instead of linking: it renders the target's diff lines
-inline as a collapsed block, with a link through to their context. Useful for
-referring to a span of a file that had to appear early.
-
-```markdown
-The value being overridden is [set here](ldq:#dockerfile-settings-env).
-```
-
-Every file also gets an automatic id, `#file-<path with non-word chars
-hyphenated>` — e.g. `ld:#file-web-frontend_assets.py`.
-
-## More than one repository
-
-A change often spans repos: h2o pins `harvard-lil/lil-actions/…@main`, so an
-action change reaches it with no commit in h2o at all, and the registry it
-deploys into is defined in lil-terraform. Reading any one diff alone hides most
-of the story.
-
-Declare the repos as named sources and address files as `source:path`:
+The map draws the groups as rows of boxes, each group wider than the one
+above, full size after the header as the top-level contents and again as a
+postage stamp in the margin with the box in view marked.
 
 ```yaml
-sources:
-  actions: {repo: ../lil-actions, range: 48b57bb...e626b6e}
-  tf:
-    repo: ../lil-terraform
-    range: f6b5a5e...9fadc90
-    pathspec: [h2o/aws, legacy/primary/us-east-1/ecr]
-  h2o: {repo: ../h2o, range: prod...main}
+layers:
+  - id: builders
+    group: summary
+    row: 2
+    title: Deploy builders
+    subtitle: What to reuse, and the habit to drop, when setting up a deploy elsewhere.
+    audience: someone about to build the next deploy
+    budget: 3 minutes          # or "600 words"; the lint reports overruns
+    claims: required           # an unsupported claim is a warning, not just a mark
+    text: |
+      Markdown.
+  - id: code
+    kind: stream
+    group: evidence
+    title: Code
+    subtitle: The annotated diff, in dependency order.
+    sources: [h2o, actions]    # one or more sources of one ordering kind
+    hide: ["**/dist/**"]
+    collapse: ["**/package-lock.json"]
+    chapters:
+      - id: mechanism
+        title: "1. A way to tag an image without rebuilding it"
+        note: |
+          Why the reader has moved here.
+        files: [actions:ecr-tag-image/action.yml, "actions:ecs-build/**"]
+      - title: Housekeeping
+        files: ["*"]
+    items:                     # per-item annotations; same as top-level `files:`
+      actions:ecr-tag-image/action.yml: {title: ..., note: ...}
 ```
 
-A source may also take `label:` (display name), `diff:` (a patch file instead of
-a repo and range), and its own `context:`. Sources can be added from the command
-line too, repeatably: `--source actions=../lil-actions@48b57bb...e626b6e`.
+A stream of sources that order themselves (a transcript, by time) takes
+chapters fixed at an item: `- {at: main:t0902-0951, title: ...}`. A stream
+of sources the author arranges (diffs, documents) takes chapters that list
+items, with `*` for the remainder. The two kinds cannot share a layer.
 
-With sources declared, `order:`, `hide:`, `collapse:` and the keys under
-`files:` all accept qualified keys. A pattern **with** a `source:` prefix matches
-that repo only; a **bare** pattern matches the path inside every repo, so
-`hide: ["**/node_modules/**"]` means the same thing everywhere and single-repo
-sidecars keep working. A bare key under `files:` is fine when it is unambiguous;
-when two repos share the path, it is reported rather than guessed at.
+Sources no layer places are rendered in an automatic closing layer, so every
+citation has somewhere to land.
 
-References need nothing new — ids are document-global, so `ld:` and `ldq:` cross
-repositories exactly as they cross files, arrows included. Automatic file ids
-include the source (`#file-actions-ecs-build-action.yml`), so two repos with the
-same path do not collide.
+## Sources
 
-### Chapters
+Each entry under `sources:` has a `type:` (default `diff`) and `label:`
+(display name). Files and other items are addressed as `source:path`; a bare
+path works when only one source has it.
 
-Across several repos the reader needs to be told why the document just moved
-from one to another. `chapters:` replaces `order:` and cuts it into titled,
-annotated runs:
+### diff
 
 ```yaml
-chapters:
-  - id: mechanism
-    title: "1. A way to tag an image without rebuilding it"
-    note: |
-      Promotion needs an operation that marks an existing image as deployed.
-      That operation did not exist yet.
-    files:
-      - actions:ecr-tag-image/action.yml
-      - actions:ecs-build/action.yml
-
-  - title: "2. A registry that will accept it"
-    files:
-      - "tf:**/ecr/**"
-
-  - title: "Everything else"
-    files: ["*"]
+h2o:
+  repo: ../h2o
+  range: 63da32f3...origin/main
+  pathspec: [".", ":!web/static/dist"]   # optional
+  context: 3                              # optional
+actions:
+  diff: changes.patch                     # a patch file instead of a repo
 ```
 
-`*` may appear inside any chapter's `files:` and takes the remainder there;
-without one, unclaimed files become a closing untitled run. A chapter's `id`
-makes it linkable as `ld:#ch-<id>`. Setting both `chapters:` and `order:` warns
-and uses chapters.
+`--repo`/`--range`/`--diff`/`--pathspec` on the command line are the
+single-source form; `--source name=repo@range` adds one. Prefer
+`origin/main` to a local branch when the checkout may lag.
 
-### Categories
-
-A plot that lists what a batch achieved -- by kind of win: security,
-performance, cost -- wants a way to point from each claim to the lines that
-deliver it, and back. `categories:` declares the kinds; a list in any
-annotation is bound to one by a `{category: name}` marker on the line before it,
-and any annotation can then cite an item with an `ldc:` flag.
+### transcript
 
 ```yaml
-categories:
-  security: Security
-  cost: {label: Cost, color: "#882255", short: "$"}
-
-plot: |
-  ## Security
-
-  {category: security}
-  1. {#build-role} Builds publish under a role that cannot deploy.
-  2. Deploy roles trust one GitHub environment each, not every branch.
-
-files:
-  tf:h2o/aws/iam/iam_role.tf:
-    note: |
-      The build role [](ldc:#build-role) is this resource.
+chat:
+  type: transcript
+  file: conversations.yaml      # relative to the sidecar
 ```
 
-Items are numbered by position and coloured by category. The colours come from
-Paul Tol's muted scheme, which stays distinguishable under the common forms of
-colour-vision deficiency; `color:` overrides one, and `short:` prefixes the
-number (`$1`) where colour alone should not carry the distinction. An item may
-carry an id in `{#id}`; without one it is addressable as `name-N`.
-
-A flag `[](ldc:#build-role)` renders as the item's coloured number. Hovering it
-shows the item's text; clicking it goes to the item. Each item in turn lists the
-places that flag it, with the usual direction arrows, so the plot doubles as an
-index into the evidence. A label inside the brackets is kept after the badge.
-
-Flags may cite items defined anywhere in the document; the renderer makes two
-passes. An unknown item, or an undeclared category, is reported on stderr. Nested
-ordered lists inside a category list are not supported.
-
-## Updating a document as the branch moves
-
-Annotations are written against a diff that is still changing. The workflow is
-to keep the sidecar next to the branch, rebuild with the new range, and read
-stderr:
-
-```bash
-uv run literate-diff --repo ../h2o --range prod...main -a notes.yaml -o out/review.html
-```
-
-Content anchors are chosen so most of them survive: they follow the line they
-name rather than a line number, so unrelated commits above them cost nothing.
-Three things do change, and each reports itself.
-
-**An anchor that no longer matches** warns and falls back to the top of its
-file, so the build still produces something readable rather than failing at the
-last step before you share it.
-
-**An anchor that now matches more than once** warns too, and this is the case
-worth understanding. It is not that the anchor breaks — it keeps working and
-starts meaning something else. The usual cause is a commit adding a comment
-that quotes the code, which lands *above* the line you meant:
-
-```
-w.yml: 'secrets: inherit' matches 2 rows; using the first (line 11).
-       Narrow the pattern or set `nth` to pin it.
-```
-
-Fix it by narrowing the pattern, or by setting `nth` if you want a later match.
-`nth: 1` does not silence this — restating the default is not evidence you
-counted the matches, and the whole point is to be told when the count changes.
-
-**New files** land wherever `*` sits, unannotated, and appear in the table of
-contents. Files that leave the diff are reported as `files:` keys that no
-longer match anything.
-
-Re-running `--outline` against the new range prints the current file list, which
-is a quick way to see what arrived.
-
-## The conversation appendix
-
-A batch built with agents has a second record beside the diff: what was asked
-for, and what came back. `literate-diff` can carry that as an appendix the
-narrative cites, so a claim in the plot can point at the sentence that prompted
-it.
-
-### Collecting is a separate phase
-
-A git range is reproducible from the repository. Session logs are not: they are
-local, mutable, and eventually deleted. So the transcript is collected once into
-a file that lives beside the sidecar, the way a `.patch` file does, and builds
-read that file rather than the logs.
+Collected separately, because session logs are local and eventually
+deleted:
 
 ```bash
 uv run literate-diff collect --repo ../h2o \
@@ -304,228 +201,319 @@ uv run literate-diff collect --repo ../h2o \
     -o conversations.yaml
 ```
 
-`--repo` names the project whose sessions to read (Claude CLI JSONL under
-`~/.claude/projects`). `--title` keeps sessions whose title contains it and is
-repeatable; `--session` takes ids or id prefixes; `--since` drops earlier turns.
-`--merge-by-title` treats sessions sharing a title as one thread in timestamp
-order, dropping the turns a resumed session repeats from the one it continued.
+`--repo` names the project whose sessions to read. `--tool` says whose logs:
+`claude-code` (the default; JSONL under `~/.claude/projects`) or `codex`
+(rollouts under `~/.codex/sessions` and `~/.codex/archived_sessions`, from
+the Codex CLI, IDE extension or desktop app, matched on the directory the
+thread ran in). Give both to collect one piece of work done in each into one
+file; every thread records its `tool:`, and the page names the agent beside
+each thread's counts. `--title` keeps sessions whose title contains it and
+is repeatable; `--session` takes ids or prefixes; `--since` drops earlier
+turns. `--merge-by-title` treats sessions sharing a title as one thread in
+timestamp order, dropping the turns a resumed session repeats.
+`--timezone` sets the clock times are shown on and turn ids are derived
+from; it defaults to the collecting machine's and is written into the file.
 
-Logs are stamped UTC, which is the wrong clock for a document about someone's
-week — an evening turn reads as the next morning. `--timezone` sets the clock
-times are shown on and turn ids are derived from; it defaults to the collecting
-machine's and is written into the transcript, so a rebuild elsewhere does not
-change what the document says.
+The output is plain YAML meant to be read and cut before it is shared:
+prompts and replies quote whatever was on screen. Nothing regenerates it.
 
-The separation is also where redaction belongs. The output is plain YAML meant
-to be read and cut before it is shared — prompts and replies quote whatever was
-on screen, which includes printed environment, paths, and error output. Trim it
-by hand; nothing regenerates it behind you.
+A turn keeps the prompt verbatim minus what the harness injected; the
+reply, meaning the last text block before the next prompt, with earlier
+blocks kept as narration for the band below; and the work between them as
+counts only (time, tokens, tool calls by name, attachments). Turn ids
+derive from when the turn happened, so re-collecting does not renumber.
 
-### What a turn keeps
+For Codex, what the harness injected is the environment and AGENTS.md
+context, skill bodies, browser state and the file lists the desktop app puts
+above "My request"; the files are kept as attachment names. Codex names
+threads in `~/.codex/session_index.jsonl`; an unnamed thread is titled by
+its first message, as Codex lists it. Threads Codex spawned as subagents are
+not collected. Codex stores reasoning encrypted, so its turns have no
+thinking count.
 
-A turn is one prompt and everything that followed it, up to the next prompt.
+### notes
 
-- **The prompt**, verbatim, minus what the harness injected — system reminders,
-  slash-command echoes, background-task notifications, interrupt markers.
-- **The reply**: the last text block before the next prompt. Earlier text blocks
-  are narration wrapped around tool calls ("Let me check X"), and are kept
-  separately as a label for the band below.
-- **The work between them**, as counts only: elapsed time, output tokens, tool
-  calls by name, attachments by filename, thinking characters. It does not
-  expand, and that is deliberate — the outcome of the work is the diff, and the
-  transcript of it would be an order of magnitude larger than everything else
-  here put together.
+Primary sources a layer introduces itself: a statement with who said it,
+when, where, and a URL if there is one.
 
 ```yaml
-threads:
-  - id: promotion
-    title: "Promoting an image instead of rebuilding it"
-    sessions: [aaaa1111, bbbb2222]
-    turns:
-      - id: t0302-0914
-        at: 2026-03-02T09:14:00Z
-        prompt: |-
-          Every deploy rebuilds from source on the prod branch, so what ships
-          has never been tested.
-        response: |-
-          Not hard, and no service is needed. Promotion is a tag, not a copy.
-        work: {seconds: 214, tokens: 4120}
-        tools: {Bash: 12, Read: 4}
-        narration:
-          - |-
-            Reading the workflow and the registry configuration first.
+said:
+  type: notes
+  items:
+    - id: rebecca-slack
+      by: Rebecca
+      on: 2026-09-01
+      where: "#h2o in Slack"
+      text: dev and prod images that are closer together would help
+    - id: cdn-drain
+      by: Cloudflare
+      text: A 524 is returned when the origin has not answered in 100 seconds.
+      url: https://developers.cloudflare.com/…
 ```
 
-Turn ids are derived from when the turn happened, not from its position, so
-collecting again after an earlier session turns up does not renumber the ids the
-sidecar refers to.
+`file:` reads the same list from a YAML file. Cite with `ld:#rebecca-slack`;
+quote with `ldq:`. A note with a URL is evidence of kind *reference*;
+without, *attestation*.
 
-### One stream, cut into chapters
-
-Every thread's turns render as a single chronological stream. A side session
-opened to think one thing through belongs where it was asked, not in a section
-of its own, and a badge marks the turns where the stream crosses from one
-session to another.
-
-That leaves the chapters to be about the subject rather than the session, and
-because the stream is chronological a chapter is fixed by the turn it opens at:
+### terms
 
 ```yaml
-appendix:
-  title: "Appendix: the conversation"
-  note: |
-    Markdown, rendered above the stream.
-  chapters:
-    - id: sizing
-      at: promotion:t0302-0914
-      title: "Sizing one question, and getting a different answer"
-      note: |
-        Markdown, rendered where the chapter starts.
-    - id: runtime
-      at: aside:t0303-0900
-      title: "One image for every tier"
+glossary:
+  type: terms
+  items:
+    - term: digest
+      aliases: [digests]
+      text: The hash of an image's manifest; names exactly one set of bytes.
 ```
 
-Chapters may be declared in any order; they follow the stream. `ac-<id>` links
-one.
+The first use of a term or alias in each prose layer becomes a link to the
+definition, with the definition on hover. Matching is on word boundaries
+outside code, links and headings. A mapping of `term: text` works for the
+simple case.
 
-### Annotating a turn
-
-Point the sidecar at the file and annotate turns the way files are annotated.
+### doc
 
 ```yaml
-transcript: conversations.yaml
+standards:
+  type: doc
+  files:
+    - ../lil-engineering/docs/standards/deploys.md
+    - {path: notes/design.md, title: The design note this started from}
+```
 
-threads:
-  promotion:
-    title: "Promoting an image"   # overrides the collected title
-    note: |
-      Markdown, shown against this session in the appendix header.
+One item per file, rows by sentence, rendered as the markdown it was
+written in. Paths resolve from the build's working directory. Cite with
+`ld:#doc-<filename>`; quote a passage through an `anchors:` entry on the
+item.
+
+A copy exported from elsewhere, such as a Google Doc downloaded as markdown,
+records where it came from in YAML front matter:
+
+```markdown
+---
+title: Deploy standard
+origin: Google Docs
+url: https://docs.google.com/document/d/…/edit
+modified: 2026-08-14T17:36:37Z
+retrieved: 2026-09-14
+---
+```
+
+The page shows `title` beside the filename and the other keys as a line
+under it (a link to the original, the last-modified and retrieved dates).
+Rows and anchors start after the front matter; the embedded copy keeps it.
+The same keys on a `files:` entry override the file's.
+
+## Annotating items
+
+Under top-level `files:` (diffs), `turns:` (transcripts), or a stream
+layer's `items:`:
+
+```yaml
+files:
+  Dockerfile:
+    title: one build graph       # shown beside the path
+    collapsed: false
+    note: |                      # introduces the item, in the story
+      Markdown, rendered above the diff.
+    sections:                    # a band inside the diff
+      - at: "FROM prod AS test"
+        id: dockerfile-test
+        title: "test — what CI runs the suite against"
+        note: "Markdown."
+    notes:                       # a sidenote in the right margin
+      - at: "ENV H2O_SETTINGS_MODULE"
+        span: 1
+        id: settings-env
+        text: "Markdown."
+    anchors:                     # named ranges with no visible output
+      - {id: uwsgi-build, at: "CPUCOUNT=1", span: 5}
 
 turns:
   promotion:t0302-0914:
-    id: q-promotion               # what `ld:` and `ldq:` address
-    note: |
-      Markdown, rendered above the turn.
+    id: q-promotion              # what `ld:` and `ldq:` address
+    note: Markdown, rendered above the turn.
     prompt: {at: "How hard is it to test one image"}
-    response:                     # one passage, or several
+    response:                    # the highlight: one passage, or several
       - {at: "Promotion is a tag, not a copy"}
       - {at: "The work is in the two things", through: "before you need it"}
     anchors:
       - {id: q-why, at: "the lifecycle policy", in: response}
 ```
 
-A message is rows the way a file's diff is rows, so `at:`, `nth:`, `span:` and
-`through:` mean what they mean everywhere else. The rows are sentences rather
-than lines, because a prompt is usually one long paragraph and the part worth
-quoting is a sentence of it; code, table and heading lines stay whole, and a
-split is declined where it would cut an abbreviation, a list label (`A.`) or a
-run of `**bold**`. The `+412` and `-88` line-number forms have nothing to
-address here, but `@N` does.
+### Anchoring
 
-`prompt:` and `response:` are the **highlight**: the part that shows. Give a
-list where one decision turned on two passages that are pages apart — the
-options and the recommendation, say. The rest of the message is in the page
-behind a "show all" control inside the message, and a reference into a folded
-row opens it.
+`at:` locates a row. Ordering is by position, so an anchor is stable against
+changes elsewhere.
 
-Without a highlight, a message shows its opening **and its closing passage**.
-The close is doing more work than its length suggests: it is what the next turn
-answers — the recommendation, the question back, or, in a long paste, the thing
-the person actually wanted asked. The opening stops on a paragraph boundary
-rather than mid-argument, gives way at twice the budget for a paste with no
-blank line in it, keeps a heading with the paragraph under it, and shows a short
-tail rather than folding it, since hiding two sentences costs the reader more
-than showing them.
+| form | meaning |
+| --- | --- |
+| `"some text"` | first row containing that substring |
+| `/regex/` | first row matching the regex |
+| `@37` | the 37th row, counting from 0 |
+| `+412` | diffs only: the row that is line 412 on the new side |
+| `-88` | diffs only: the row that is line 88 on the old side |
 
-Messages render as the markdown they were written in — headings, lists, tables,
-fenced code, links — while every row keeps its own id, so a reference can still
-land on one sentence inside a rendered list.
+`nth: 2` takes the second match. A range extends with `span: 5` (five rows)
+or `through: "other text"` (up to the next match). An unmatched anchor
+warns and falls back to the top of the item; an anchor that matches more
+than once warns too, because a later commit can silently move it (`nth: 1`
+does not silence this).
 
-Every turn is addressable whether or not it is annotated, so the narrative can
-quote one before the sidecar has an entry for it:
+In a message, rows are sentences rather than lines, since the part of a
+prompt worth quoting is a sentence of it; code, tables and headings stay
+whole. Without a highlight a message shows its opening and its closing
+passage, the close being what the next turn answers.
 
-- `#turn-<thread>-<turn id>` — the turn (`#q-promotion` when `id:` is set)
-- `#turn-<thread>-<turn id>-prompt`, `-response` — the first highlighted passage
-- `-prompt2`, `-response2`, … — the second and later passages
+### References and quotes
 
-`ld:` links to a turn and `ldq:` quotes it inline, exactly as they do for a
-diff; quoting a message shows the words with no signs or line numbers, and a
-link through to where they were said. The label decides the form: `[a
-label](ldq:#id)` is a control the reader opens, `[](ldq:#id)` renders the
-quoted words in place for prose that is reciting them, and `[](ld:#id)` is a
-small citation marker for a sentence that has already said the thing and only
-needs to say where it came from. Because the appendix follows the files,
-references from the narrative into it point forward.
+Inside any markdown, a link with the `ld:` scheme points at an id anywhere
+in the document:
 
-Turns are not interleaved with the diff. The diff is the document's spine and
-the conversation is the record behind it; a chapter about work that left no
-trace in the diff cites the turns rather than embedding them.
+```markdown
+See [the settings switch](ld:#settings-switch) for where this value comes from.
+```
 
-### On keeping all of it
+The arrow (`↑` back, `↓` forward) is computed from position in the rendered
+page. Clicking opens a folded item, scrolls, and highlights the rows. A
+reference with no label, `[](ld:#id)`, renders as a small citation marker.
 
-The appendix is worth more comprehensive than curated. Two people read it: one
-following how a decision was reached, who needs the turns in order rather than
-the good ones; and one deciding how hard to review the diff, for whom "ok go
-ahead" next to a link to a failing run is the evidence, not the noise. A
-selection of the turns where the answer was good is a third thing, and reads
-like one.
+`ldq:` quotes instead of linking: a diff's lines with signs and numbers, a
+message's or note's words with attribution, each with a link through to
+context. `[a label](ldq:#id)` is a control the reader opens; `[](ldq:#id)`
+renders the quoted words in place.
 
-Cut for confidentiality. Keep the rest, and let the highlights carry the
-reading.
+Every item also gets an automatic id: `#file-<source>-<path>` for a file,
+`#turn-<thread>-<turn>` for a turn (`-prompt`, `-response`, `-prompt2`… for
+its passages), a note's own id, `#term-<term>`, `#doc-<filename>`.
 
-## Size
+## Categories, claims and evidence
 
-The output is one file with no external requests, so its size is the size of
-the markup. Most of that is per-line addressing: every diff row and every
-sentence of the conversation carries an id, which is what lets `ld:` and `ldq:`
-land on one line.
+`categories:` declares kinds of claim; `{category: name}` on the line
+before an ordered list binds the list; each item is numbered and coloured
+(Paul Tol's muted scheme, distinguishable under colour-vision deficiency;
+`color:` overrides, `short:` prefixes the number). `{#id}` at the start of
+an item names it; otherwise it is `name-N`.
 
-Files that render folded shut are the exception. A collapsed file costs about
-145 bytes of table scaffolding per line for about 47 bytes of code, for content
-nobody has asked to see, so it ships as rows in `window.LD_ROWS` and the table
-is built the first time the file is opened — by a click, or by a reference
-pointing into it. Nothing is lost that worked before: a folded `<details>` is
-already invisible to find-in-page, and the rows are still plain text in the
-file. On a 178-file document that is about 0.4 MB.
+```yaml
+categories:
+  security: {label: Security, short: S}
+layers:
+  - id: wins
+    text: |
+      {category: security}
+      1. {#build-role} Before, builds published under the deploy role. Now under one that cannot deploy.
+files:
+  tf:h2o/aws/iam/iam_role.tf:
+    note: The build role [](ldc:#build-role) is this resource.
+```
 
-Serving the file over HTTP makes most of this moot — it gzips to about a sixth.
-The size matters when it is emailed or dropped in a bucket uncompressed.
+A flag `[](ldc:#build-role)` renders as the item's coloured number, shows
+the item on hover, and links to it; the item lists every place that flags
+it. `ld:#cat-build-role` links to an item in prose.
 
-## Layout notes
+`{claims}` before a plain list makes each item a claim without a category.
+For every claim, in either kind of list, the page computes what it **rests
+on**: the kinds of source it cites (`ld:`/`ldq:` to a row: *diff*,
+*conversation*, *attestation*, *reference*, *document*) and the kinds of
+place that flag it. A claim that cites another claim (`ldc:#x`,
+`ld:#cat-x`) rests on what that claim rests on. The kinds show beside the
+claim; a claim with none is marked *unsupported*, and in a layer with
+`claims: required` it is a warning. The tool never judges the evidence; it
+says whether there is any.
 
-Sidenotes are positioned in the right margin against their anchor line, pushed
-down as needed so they never overlap; below 62rem they fold into the diff table
-underneath the line they annotate. Both light and dark themes follow the
-reader's system setting.
+## The file describes itself
+
+The page begins with an HTML comment saying what it is, its layers and
+sources, and how to get the data out, and the header tells a person that an
+agent given the file will find those instructions.  A JSON data block,
+`<script type="application/json" id="ld-data">`, holds the sidecar, each
+source's copy of record (the patches, the transcript, the notes), the
+brief, and every claim with its evidence, with `<` written as `\u003c` so
+the block is safe inside a script element.
+
+```bash
+pup 'script#ld-data text{}' < page.html | jq '.claims[] | select(.supported|not)'
+htmlq -t '#ld-data' -f page.html | jq -r .sidecar
+```
+
+```bash
+literate-diff extract page.html --about        # the header comment
+literate-diff extract page.html --layers       # ids, kinds, audiences
+literate-diff extract page.html --layer summary  # markdown, quotes resolved
+literate-diff extract page.html --claims       # JSON lines
+literate-diff extract page.html --claim oidc-scope
+literate-diff extract page.html --sidecar
+literate-diff extract page.html --source chat
+literate-diff extract page.html --to dir/      # sidecar + sources; rebuild from dir/
+```
+
+`--to` writes a `build.yaml` whose sources point at the extracted files, so
+the page rebuilds without the repositories. In the page, `window.LD.data()`
+returns the same object. `--no-embed` at build time leaves the inputs out.
+
+The browser renders from this data block, including a compiled `presentation`
+with shared markup and references into source text. It requires JavaScript to
+display; extraction does not. See [the HTML data contract](docs/html-data.md)
+for the representation and compatibility rules.
+
+## Lint
+
+```bash
+uv run literate-diff lint notes.yaml
+```
+
+Also run at build; `--strict` fails the build on any warning. Beyond the
+anchor and id checks, the lint reports a prose layer over its `budget:`, a
+claim that cites nothing in a `claims: required` layer, a sentence whose
+subject is the document rather than the work ("This section traces…", "the
+reader", "Below,", "since the last draft"), and two completeness checks
+that follow from a synthesis block being a comprehensive extraction of one
+facet: a declared category no list uses, and a defined term no prose layer
+uses.
+
+## Output
+
+One file, no external requests: CSS and JS inlined, sources embedded. Every
+diff row and every sentence of the conversation carries an id, which is
+what lets `ld:` land on one line. Files that render folded shut ship as
+rows in `ld-data.presentation.rows` and are built the first time they are
+opened. Repeated markup uses a dictionary, and matching presentation text
+references the embedded source record. HTTP compression can reduce transfer
+size further; the standalone file also works from disk.
+
+Sidenotes sit in the right margin against their line, pushed down as needed
+so they never overlap; below 62rem they fold into the table under the line
+they annotate. Light and dark follow the reader's system setting. The map
+in the margin shows the blocks as a grid and marks the one in view.
+
+## Updating as the branch moves
+
+While drafting, keep the sidecar beside the sources and update its intended
+range explicitly. Freeze commit endpoints when publishing a dated account.
+For a scope change, rebuild with the new range and read
+stderr: an anchor that no longer matches falls back to the top of its file
+and warns; an anchor that now matches more than once warns (the usual cause
+is a commit adding a comment that quotes the code, above the line you
+meant); new files land at `*` unannotated; keys that name nothing are
+reported. `--outline` against the new range prints the current file list.
 
 ## Example
 
 [`examples/feature-tour/`](examples/feature-tour/) is a small invented
-change, an app repository and an infrastructure repository as two patch
-files, with an invented two-session transcript beside them, annotated with
-every feature: sources, categories and flags, chapters, hiding and folding,
-sections, sidenotes, quotes, each anchor form, and a conversation appendix —
-interleaved, chaptered, with a two-passage highlight — that the plot cites. The
-rendered output is committed beside it as
-[`feature-tour.html`](examples/feature-tour/feature-tour.html). Rebuild it
-from the repository root, since `diff:` paths resolve from the current
-directory:
+change across an app repository and an infrastructure repository, with a
+two-session transcript, a reference document, two notes and three terms,
+annotated with every feature. [`notes.yaml`](examples/feature-tour/notes.yaml)
+is the v2 shape, eleven blocks in three groups; [`notes-v1.yaml`](examples/feature-tour/notes-v1.yaml)
+the same document in the v1 shape. Rebuild from the repository root, since
+`diff:` and document paths resolve from the current directory:
 
 ```bash
 uv run literate-diff -a examples/feature-tour/notes.yaml \
     -o examples/feature-tour/feature-tour.html
 ```
 
-The test suite builds it and fails on any warning.
-
-## Writing one
-
-[`.agents/skills/literate-diff/SKILL.md`](.agents/skills/literate-diff/SKILL.md)
-is the working order for producing a document: choosing ranges and sources,
-reading the diff and the record behind it, writing the plot and its category
-lists, cutting chapters, annotating, and iterating on the build's warnings.
-It is written for an agent and reads as a checklist for a person.
+The test suite builds both and fails on any warning.
 
 ## Development
 
@@ -534,11 +522,10 @@ uv sync
 uv run pytest
 ```
 
-The tests cover the diff parser (renames, binary payloads, quoted paths,
-missing-newline markers, per-side line numbering), anchor resolution in all of
-its forms, ordering and glob handling, the rendered output — reference
-direction, quoting, escaping, and the anchor map handed to the client script —
-and the conversation side: what the collector keeps and discards from a session
-log, how resumed sessions merge, sentence splitting that declines to cut a
-label or a bold run, markdown blocks rebuilt around addressable rows,
-multi-passage highlights, interleaving, and appendix chapters.
+`literate_diff/model.py` is the document model; `sidecar.py` reads the
+sidecar into layers of bound items; `anchors.py` resolves `at:` specs;
+`render.py` composes the page; `extract.py`, `lint.py`, `outline.py` and
+`cli.py` are what they say. `sources/` holds one plugin per source type
+behind the contract in `sources/base.py`; `parse.py`, `transcript.py`,
+`message.py` and `collect.py` are the diff and transcript plugins'
+machinery. `annotate.py` keeps the v1 names for callers that used them.
