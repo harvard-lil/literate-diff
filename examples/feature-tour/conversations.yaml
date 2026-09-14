@@ -1,0 +1,92 @@
+# literate-diff transcript.
+#
+# Collected from local agent session logs, which are neither shared nor
+# permanent -- this file is the copy of record. Read it before it goes
+# anywhere: prompts and replies quote whatever was on screen at the time.
+# Editing is expected. Cut turns, redact lines, fix a title.
+#
+# This one is invented, like the two patches beside it.
+collected: 2026-03-04T18:00:00Z
+tool: claude-code
+# Timestamps below are UTC, as the logs record them. `timezone` is the
+# clock they are shown on, and the one the turn ids were derived from.
+timezone: America/New_York
+threads:
+  - id: promotion
+    title: "Promoting an image instead of rebuilding it"
+    sessions: [aaaa1111, bbbb2222]
+    turns:
+      - id: t0302-0914
+        at: 2026-03-02T09:14:00Z
+        session: aaaa1111
+        prompt: |-
+          Every deploy rebuilds from source on the prod branch, so what ships
+          has never been tested. How hard is it to test one image and then ship
+          that same image? I don't want to invent a promotion service for it.
+        response: |-
+          Not hard, and no service is needed. Promotion is a tag, not a copy:
+          the registry already stores the image by digest, so "promote" means
+          adding a second tag to a digest that is already there.
+
+          The work is in the two things that make that safe. Tags have to be
+          immutable, or a commit tag can be moved under you between test and
+          deploy. And the lifecycle policy has to expire deployed images more
+          slowly than candidates, or the thing you want to roll back to is
+          collected before you need it.
+        work: {seconds: 214, tokens: 4120}
+        tools: {Bash: 12, Read: 4}
+        narration:
+          - |-
+            Reading the workflow and the registry configuration first.
+
+      - id: t0302-1042
+        at: 2026-03-02T10:42:00Z
+        session: aaaa1111
+        prompt: |-
+          Do it, and while you're in there the workflow has AWS keys in it.
+          Can those go?
+        response: |-
+          Gone. The job now assumes a role through the GitHub OIDC provider,
+          and the trust policy names one environment rather than every ref in
+          the repository, so a workflow on a pushed branch cannot assume it.
+        work: {seconds: 431, tokens: 8830}
+        tools: {Bash: 22, Edit: 9}
+        attachments: ["deploy.yml"]
+
+      - id: t0303-1530
+        at: 2026-03-03T15:30:00Z
+        session: bbbb2222
+        prompt: |-
+          One more: the settings module is copied in at build time, which is
+          why there are two Dockerfiles. Can the image choose at runtime?
+        response: |-
+          Yes, and it removes the second Dockerfile. The module is selected
+          from an environment variable at startup, so one image runs in every
+          tier and the `test` stage can be built from `prod`.
+        work: {seconds: 96, tokens: 2210, thinking: 1840}
+        tools: {Bash: 6, Edit: 3}
+        events: 1
+
+  - id: aside
+    title: "Checking what the registry charges for"
+    sessions: [cccc3333]
+    turns:
+      - id: t0303-0900
+        at: 2026-03-03T09:00:00Z
+        prompt: |-
+          Separate question, asked here so it doesn't drag the other session
+          around: if we keep every commit's image, what does that cost?
+        response: |-
+          Not much, and the lifecycle policy is the lever.
+
+          | population | rule | kept |
+          |---|---|---|
+          | candidates | `sha-` prefix | 30 |
+          | deployed | `staging-`, `prod-` | 100 |
+
+          At this image size that is a few dollars a month, which is
+          below the noise floor of the account. The reason to expire anything
+          is not cost; it is that an unbounded repository makes `describe-images`
+          slow enough to time out in the deploy.
+        work: {seconds: 61, tokens: 1180}
+        tools: {Bash: 4}

@@ -2,17 +2,47 @@
 # "wren" moving from build-at-deploy to build-once, promote-by-digest, across
 # an app repository and an infrastructure repository.
 #
-# Build from the repository root, because `diff:` paths resolve from the
-# current directory:
+# Build from the repository root, because `diff:` and doc paths resolve from
+# the current directory:
 #
 #   uv run literate-diff -a examples/feature-tour/notes.yaml \
 #       -o examples/feature-tour/feature-tour.html
+#
+# `notes-v1.yaml` beside this file is the same document in the v1 shape
+# (`plot:`, `chapters:`, `appendix:`), which still builds.
 
 title: "Promote, do not rebuild"
 subtitle: "A feature tour of literate-diff on an invented two-repository change"
 
+# --- Brief -------------------------------------------------------------------
+# Not rendered. Written before any prose, embedded with the sidecar, read by
+# the lint and by anyone interrogating the file: who this is for and why.
+brief:
+  author: |
+    Wanted the suite to run against the bytes that ship, and to stop carrying
+    long-lived cloud keys in a public repository. Knew the registry could
+    hold an image by digest; did not know whether promotion needed a service.
+  learned: |
+    Promotion needs no service; the registry already holds an image by
+    digest, and two registry settings make promoting it safe.
+  outside_the_record:
+    - Priya's Slack message about the Friday deploy is a note (`ops-slack`).
+  readers:
+    - who: someone setting up a deploy elsewhere
+      knows: Docker, CI; not this registry's tag rules
+      does: copies the pattern, or does not
+      asks: what do I have to set on the registry before promotion is safe?
+    - who: whoever reviews the cloud configuration
+      knows: IAM; not GitHub environments
+      does: signs off on the trust policy, or sends it back
+      asks: who can assume the deploy role now?
+  beats:
+    - the suite runs against the bytes that ship
+    - a deploy is a tag, not a build
+    - the deploy role trusts one environment, not every branch
+
 # --- Sources -----------------------------------------------------------------
-# A source is a repo and a range, or a patch file. Files are addressed as
+# Evidence. Each has a `type:`; the default is `diff`. Files are addressed as
 # `source:path`. `label:` is the display name.
 sources:
   app:
@@ -23,11 +53,59 @@ sources:
     diff: examples/feature-tour/infra.patch
     label: wren-terraform
     range: main...deploy-by-digest
+  chat:
+    type: transcript
+    file: conversations.yaml
+    label: the conversation
+  standards:
+    type: doc
+    label: standards
+    files:
+      - path: examples/feature-tour/deploy-standard.md
+        title: The deploy standard this change follows
+  said:
+    type: notes
+    label: things people said
+    items:
+      - id: ops-slack
+        by: Priya
+        on: 2026-03-01
+        where: "#wren in Slack"
+        text: |
+          We shipped a build on Friday that the suite had never seen, because
+          the deploy rebuilt from source after the tests passed on a different
+          image. Second time this month.
+      - id: cdn-drain
+        by: Sam
+        text: |
+          Cloudflare answers 524 at about 100 seconds, so an origin drain longer
+          than that waits for clients that have already gone.
+        url: https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-524/
+  glossary:
+    type: terms
+    items:
+      - term: digest
+        aliases: [digests]
+        text: |
+          The hash of an image's manifest. It names exactly one set of bytes,
+          where a tag is a movable name that points at whatever it pointed at
+          that day.
+      - term: promotion
+        aliases: [promote, promotes, promoted]
+        text: |
+          Marking an image the suite has passed as deployed by adding a tag to
+          its digest. No copy is made and no second build happens.
+      - term: OIDC
+        text: |
+          OpenID Connect. A CI job presents a signed token stating which
+          repository, branch or environment it runs for, and a cloud role's
+          trust policy says which such subjects may assume it. Replaces
+          long-lived access keys stored as secrets.
 
 # --- Categories --------------------------------------------------------------
-# Kinds of win, for the lists in the plot. Colours default to a palette that
-# stays distinguishable under colour-vision deficiency; `color:` overrides,
-# `short:` prefixes the number where colour alone should not carry it.
+# Kinds of win, for the lists in the wins layer. Colours default to a palette
+# that stays distinguishable under colour-vision deficiency; `color:`
+# overrides, `short:` prefixes the number where colour alone should not carry it.
 categories:
   security:    {label: Security, short: S}
   correctness: {label: Correctness, short: C}
@@ -35,132 +113,278 @@ categories:
   regression:  {label: Regression, short: X, color: "#555555"}
   future:      {label: Future work, short: F, color: "#BBBBBB"}
 
-# --- Plot --------------------------------------------------------------------
-plot: |
-  Before this change, every deploy built a fresh image on the `prod` branch
-  and pushed it as `latest`, with production settings copied into the image
-  at build time and long-lived AWS keys in the workflow. The suite never ran
-  against the bytes that shipped.
+# --- Layers ------------------------------------------------------------------
+# The debrief, top to bottom, in three groups: summary (what the author wants
+# the reader to know), synthesis (why the author believes it), evidence (what
+# happened). `row:` orders rows within a group; the map draws the shape. A
+# title is a noun naming the block; `subtitle:` says what it contains and
+# where it came from. `audience:` and `budget:` are metadata for the brief,
+# the lint and the cold read, shown on hover in the map, not in the header.
+# A prose layer's text is markdown; `{claims}` on the line before a list makes
+# each item a claim that shows what it rests on.
+layers:
+  - id: summary
+    group: summary
+    title: Executive summary
+    subtitle: What changed, for anyone.
+    audience: anyone
+    budget: 1 minute
+    claims: required
+    text: |
+      {claims}
+      * **The suite runs against the bytes that ship.** CI used to build one
+        image to test and the deploy built another from the same source
+        [](ld:#ops-slack); now it builds one, tests the `test` stage on top of
+        it, and the deploy ships the image that passed [](ldc:#same-bytes).
+      * **A deploy is a tag, not a build**, so it takes seconds rather than
+        minutes and cannot produce something the suite has not seen
+        [](ld:#q-promotion).
+      * **No AWS keys in the workflow.** The job assumes a role through
+        GitHub's OIDC provider, and the trust policy names one environment
+        rather than every branch in the repository [](ld:#cat-oidc)
+        [](ld:#doc-deploy-standard.md).
 
-  After it, CI builds one image per commit, tests the `test` stage that is
-  built from `prod`, and publishes it tagged with the commit. The deploy
-  resolves that tag to a digest and ships the digest. The registry refuses to
-  move a commit tag, keeps deployed images longer than candidates, and the
-  deploy role trusts one GitHub environment rather than every branch.
+  - id: builders
+    group: summary
+    row: 2
+    title: Deploy builders
+    subtitle: What to reuse, and the habit to drop, when setting up a deploy elsewhere.
+    audience: someone about to build the next deploy
+    budget: 2 minutes
+    text: |
+      Promotion needs no service: the registry stores an image by digest, so
+      shipping a tested image means adding a tag to a digest that is already
+      there [](ld:#q-promotion). Two registry settings make it safe -- immutable
+      tags, and a lifecycle policy that expires deployed images more slowly
+      than candidates. Drop the habit of copying a settings module in at
+      build time; choose it at runtime and the second Dockerfile goes away
+      [](ld:#q-settings). The [deploy standard](ld:#doc-deploy-standard.md)
+      says the same in four paragraphs.
 
-  The chapters run in dependency order: the registry has to accept immutable
-  tags before the workflow can rely on them.
+  - id: iam
+    group: summary
+    row: 2
+    title: IAM reviewers
+    subtitle: The one trust-policy change, and why it is narrower than before.
+    audience: whoever reviews the cloud configuration
+    budget: 1 minute
+    text: |
+      A deploy role whose trust policy names a branch can be assumed from any
+      pushed branch. Name the environment instead [](ldc:#oidc).
 
-  ## Wins
+  - id: overview
+    group: synthesis
+    title: Overview
+    subtitle: What was true before, what is true now, and the property the change is organised around.
+    audience: a colleague in another role
+    budget: 3 minutes
+    text: |
+      Before this change, every deploy built a fresh image on the `prod`
+      branch and pushed it as `latest`, with production settings copied into
+      the image at build time and long-lived AWS keys in the workflow. The
+      suite never ran against the bytes that shipped, which is how
+      [](ldq:#ops-slack)
 
-  Each item recurs as a coloured number where it is delivered; hover the
-  number to see the item, click to come back. Each item lists where it is
-  flagged.
+      After it, CI builds one image per commit, tests the `test` stage that
+      is built from `prod`, and publishes it tagged with the commit. The
+      deploy resolves that tag to a digest and ships the digest. The registry
+      refuses to move a commit tag, keeps deployed images longer than
+      candidates, and the deploy role trusts one GitHub environment rather
+      than every branch.
 
-  ### Security
+      The change was [asked for as a question about testing what
+      ships](ldq:#q-promotion-prompt), and the two properties that make
+      promotion safe [came back with the answer](ld:#q-promotion-response).
 
-  {category: security}
-  1. {#oidc} Before, the deploy trusted `repo:example/wren:*`, so any branch
-     could assume the deploy role. It now trusts the `prod` environment only.
-  2. {#no-keys} Before, the workflow carried long-lived access keys as
-     repository secrets. It now assumes a role over OIDC.
-  3. {#sha-pins} Before, actions were referenced by tag. They are pinned to a
-     commit SHA.
+  - id: narrative
+    group: synthesis
+    title: Work narrative
+    subtitle: The decisions and turning points, in the order they arrived, from the conversation and the code.
+    audience: someone judging the work
+    budget: 3 minutes
+    text: |
+      **1. Testing what ships** (Monday). Every deploy rebuilt from source on
+      the `prod` branch, so what shipped had never been tested. The answer
+      was that no promotion service was needed, because the registry already
+      stores an image by digest: [](ldq:#p-promotion) *The work moved from
+      building a mechanism to making two registry properties safe.*
 
-  ### Correctness
+      **2. The keys, asked as an aside** (Monday). Noticed in passing rather
+      than planned [](ld:#q-oidc), and answered in the same batch.
+      *Long-lived AWS keys left the workflow.*
 
-  {category: correctness}
-  1. {#same-bytes} Before, the deploy rebuilt the image, so the bytes tested
-     and the bytes shipped were two builds of the same source. The deploy
-     now promotes the image CI tested, by digest.
-  2. {#runtime-settings} Before, the production settings module was copied
-     over `settings.py` at build time, so one image could only ever be
-     production. The module is named at runtime, and one image boots as any
-     tier.
+      **3. One image for every tier** (Tuesday). The settings module was
+      copied in at build time, which is why there were two Dockerfiles
+      [](ld:#q-settings). *Choosing at runtime removed the second file and
+      let `test` be built from `prod`.*
 
-  ### Reliability
+      The chapters run in dependency order: the registry has to accept
+      immutable tags before the workflow can rely on them.
 
-  {category: reliability}
-  1. {#immutable} Before, a re-run could repoint a commit tag at different
-     bytes. Commit tags are immutable; only `latest` moves.
-  2. {#retention} Before, "keep last 5" expired the image production was
-     running as soon as five more merges landed. Deployed images now age on
-     their own rule.
-  3. {#health} Before, health checks ran once a minute and old tasks drained
-     for five minutes. Checks run every 15 seconds and the drain is 120,
-     since the CDN gives up on an origin at about 100.
+  - id: improvements
+    group: synthesis
+    title: Improvements
+    subtitle: Every win by kind, each stating what was true before and what is true now.
+    audience: someone reviewing the change
+    budget: 3 minutes
+    text: |
+      Each item recurs as a coloured number where it is delivered; hover the
+      number to see the item, click to come back. Each item lists where it is
+      flagged.
 
-  ## The other side
+      ### Security
 
-  ### Regressions
+      {category: security}
+      1. {#oidc} Before, the deploy trusted `repo:example/wren:*`, so any
+         branch could assume the deploy role. It now trusts the `prod`
+         environment only.
+      2. {#no-keys} Before, the workflow carried long-lived access keys as
+         repository secrets. It now assumes a role over OIDC.
+      3. {#sha-pins} Before, actions were referenced by tag. They are pinned
+         to a commit SHA.
 
-  {category: regression}
-  1. {#first-build} The dev image is no longer pulled, so a first checkout
-     builds it, and a dependency change rebuilds it.
-  2. {#no-maintenance} The maintenance page went with the second target
-     group. There is no maintenance mode until an edge-served one exists.
+      ### Correctness
 
-  ### Future work
+      {category: correctness}
+      1. {#same-bytes} Before, the deploy rebuilt the image, so the bytes
+         tested and the bytes shipped were two builds of the same source. The
+         deploy now promotes the image CI tested, by digest.
+      2. {#runtime-settings} Before, the production settings module was
+         copied over `settings.py` at build time, so one image could only
+         ever be production. The module is named at runtime, and one image
+         boots as any tier.
 
-  {category: future}
-  1. {#edge-maint} A maintenance page held at the CDN, so it works when the
-     origin is down; see [Regression 2](ld:#cat-no-maintenance).
-  2. {#static} Compiled assets served from a bucket rather than the
-     container, so a rolling deploy cannot 404 on a bundle from the other
-     version.
+      ### Reliability
 
-# --- Chapters ----------------------------------------------------------------
-# Titled runs of files in reading order. `*` takes whatever is left.
-chapters:
-  - id: registry
-    title: "1. A registry that keeps its promises"
+      {category: reliability}
+      1. {#immutable} Before, a re-run could repoint a commit tag at
+         different bytes. Commit tags are immutable; only `latest` moves.
+      2. {#retention} Before, "keep last 5" expired the image production was
+         running as soon as five more merges landed. Deployed images now age
+         on their own rule.
+      3. {#health} Before, health checks ran once a minute and old tasks
+         drained for five minutes. Checks run every 15 seconds and the drain
+         is 120, since [the CDN gives up on an origin at about
+         100](ld:#cdn-drain).
+
+  - id: other-side
+    group: synthesis
+    title: Regressions and future work
+    subtitle: What got worse or was traded away, and what is left to do.
+    audience: someone reviewing the change
+    budget: 1 minute
+    text: |
+      ### Regressions
+
+      {category: regression}
+      1. {#first-build} The dev image is no longer pulled, so a first
+         checkout builds it, and a dependency change rebuilds it.
+      2. {#no-maintenance} The maintenance page went with the second target
+         group. There is no maintenance mode until an edge-served one exists.
+
+      ### Future work
+
+      {category: future}
+      1. {#edge-maint} A maintenance page held at the CDN, so it works when
+         the origin is down; see [Regression 2](ld:#cat-no-maintenance).
+      2. {#static} Compiled assets served from a bucket rather than the
+         container, so a rolling deploy cannot 404 on a bundle from the
+         other version.
+
+  - id: vocabulary
+    kind: stream
+    group: synthesis
+    title: Vocabulary
+    subtitle: The terms used above, defined for this change; linked from their first use in each block.
+    sources: [glossary]
+
+  - id: code
+    kind: stream
+    group: evidence
+    title: Code
+    subtitle: The annotated diff across the app and infrastructure repositories, in dependency order.
+    audience: someone reviewing the change line by line
+    sources: [app, infra]
+    hide:
+      - "**/dist/**"            # generated output; a bare glob matches in every source
+    collapse:
+      - "app:requirements.lock" # rendered, but folded shut
+      - "app:NOTES"
+      - "infra:maintenance-page.png"
+      - "infra:variables.tf"
+    # Titled runs of files in reading order. `*` takes whatever is left.
+    chapters:
+      - id: registry
+        title: "1. A registry that keeps its promises"
+        note: |
+          Promotion by digest is only safe if tags cannot move, and only
+          useful if the promoted image survives. Both are properties of the
+          registry, so they come first. The long-lived keys went in the [same
+          sweep](ld:#q-oidc).
+        files:
+          - infra:ecr.tf
+          - infra:iam.tf
+      - id: image
+        title: "2. One image for every tier"
+        note: |
+          The Dockerfile and the settings selector. Nothing in the workflow
+          can promote an artifact until there is one artifact.
+        files:
+          - app:Dockerfile
+          - app:app/__init__.py
+          - app:app/settings.py
+          - app:app/settings_prod.py
+      - id: deploy
+        title: "3. The deploy stops building"
+        note: |
+          With the two chapters above in place, the workflow can resolve a
+          tag to a digest and ship it. This is the only file where the change
+          is visible as a change in what the service does.
+        files:
+          - app:.github/workflows/deploy.yml
+          - infra:ingress.tf
+          - infra:maintenance.tf
+      - title: "Housekeeping"
+        note: |
+          Dependency bumps, the README, a binary, and generated output.
+          Folded shut; the lock file and the binary are here for
+          completeness.
+        files:
+          - "*"
+
+  - id: conversation
+    kind: stream
+    group: evidence
+    title: Conversation
+    subtitle: The prompts and replies the decisions turned on, in order, across two sessions.
+    audience: someone following how a decision was reached
+    sources: [chat]
     note: |
-      Promotion by digest is only safe if tags cannot move, and only useful
-      if the promoted image survives. Both are properties of the registry, so
-      they come first.
-    files:
-      - infra:ecr.tf
-      - infra:iam.tf
+      Four turns of an invented conversation, interleaved by time across two
+      sessions: the part of each prompt and reply the decision turned on,
+      with the rest one click away, and a band of counts where the work
+      itself was.
+    # Chapters here are the subject, not the session: the stream is
+    # chronological, so a chapter is fixed by the turn it opens at.
+    chapters:
+      - id: mechanism
+        at: promotion:t0302-0914
+        title: "Deciding to promote rather than rebuild"
+      - id: runtime
+        at: aside:t0303-0900
+        title: "One image for every tier"
 
-  - id: image
-    title: "2. One image for every tier"
-    note: |
-      The Dockerfile and the settings selector. Nothing in the workflow can
-      promote an artifact until there is one artifact.
-    files:
-      - app:Dockerfile
-      - app:app/__init__.py
-      - app:app/settings.py
-      - app:app/settings_prod.py
-
-  - id: deploy
-    title: "3. The deploy stops building"
-    note: |
-      With the two chapters above in place, the workflow can resolve a tag to
-      a digest and ship it. This is the only file where the change is visible
-      as a change in what the service does.
-    files:
-      - app:.github/workflows/deploy.yml
-      - infra:ingress.tf
-      - infra:maintenance.tf
-
-  - title: "Housekeeping"
-    note: |
-      Dependency bumps, the README, a binary, and generated output. Folded
-      shut; the lock file and the binary are here for completeness.
-    files:
-      - "*"
-
-# --- Hiding and folding ------------------------------------------------------
-hide:
-  - "**/dist/**"            # generated output; a bare glob matches in every source
-collapse:
-  - "app:requirements.lock" # rendered, but folded shut
-  - "app:NOTES"
-  - "infra:maintenance-page.png"
-  - "infra:variables.tf"
+  - id: references
+    kind: stream
+    group: evidence
+    title: Standards and statements
+    subtitle: The deploy standard this follows, and what people said outside the record.
+    audience: someone checking what a claim rests on
+    sources: [standards, said]
 
 # --- Files -------------------------------------------------------------------
+# Per-file annotations for the diff sources. (`items:` under a layer is the
+# same thing; this key is the older spelling and still works.)
 files:
   infra:ecr.tf:
     title: immutable tags, split retention
@@ -322,8 +546,7 @@ files:
       - at: "deregistration_delay"
         span: 1
         text: |
-          Cloudflare answers 524 at about 100 seconds, so a longer drain
-          waits for clients that have already gone.
+          [](ldq:#cdn-drain)
 
   infra:maintenance.tf:
     title: the maintenance page, removed
@@ -366,3 +589,39 @@ files:
   infra:variables.tf:
     note: |
       New, and folded shut.
+
+# --- Turns -------------------------------------------------------------------
+# Per-turn annotations for the transcript source. A turn is addressed as
+# `thread:turn`; the highlight (`prompt:`/`response:`) is the part that
+# shows, and may be several passages.
+threads:
+  promotion:
+    note: |
+      Two sessions, the second resumed after the first was compacted.
+  aside:
+    note: |
+      A separate session, opened to check one thing.
+
+turns:
+  promotion:t0302-0914:
+    id: q-promotion
+    prompt: {at: "How hard is it to test one image"}
+    response:
+      - {at: "Promotion is a tag, not a copy"}
+      - {at: "The work is in the two things", through: "before you need it"}
+    anchors:
+      - {id: p-promotion, at: "Promotion is a tag, not a copy", in: response}
+
+  promotion:t0302-1042:
+    id: q-oidc
+    note: |
+      Asked as an aside, and answered in the same batch.
+    prompt: {at: "the workflow has AWS keys"}
+    response: {at: "the trust policy names one environment"}
+
+  promotion:t0303-1530:
+    id: q-settings
+    prompt: {at: "Can the image choose at runtime?"}
+    response: {at: "it removes the second Dockerfile"}
+    anchors:
+      - {id: q-settings-why, at: "the `test` stage can be built from `prod`", in: response}
